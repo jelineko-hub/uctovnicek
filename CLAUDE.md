@@ -38,6 +38,6 @@ Funkčný vzor: Doklado (analýza v `docs/analyza-doklado.md`) — preberáme fu
 - MRP-K/S: databáza je Windows-1250 → texty cez `toCp1250Safe`; `DocumentNumber` max 10 znakov, jedinečné;
   vydané a prijaté faktúry sa v jednom XML nemiešajú; kódy „Typ DPH" (SK 10/40) sú nastaviteľné per firma.
 - Vyťaženie dokladov: len server (`lib/extraction/extract.ts`, kľúč `ANTHROPIC_API_KEY` na Verceli), model
-  `claude-opus-5-5`; výstup cez `toDocument` (čistá funkcia) — nová kolónka = schema.ts + toDocument + editor.
+  `claude-haiku-5-5` (lacný, user ho výslovne chce — drahší model len na jeho pokyn); výstup cez `toDocument` (čistá funkcia) — nová kolónka = schema.ts + toDocument + editor.
 - Názvy druhov/stavov len z `lib/documentKinds.ts`; DPH výpočty len cez `lib/vat.ts`.
 - Body serverless funkcie ~4,5 MB → súbory dokladov nahrávať priamo do Storage (`uctovnicek-documents/<company_id>/<document_id>/…`).

@@ -1,12 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { extractedDocument, type ExtractedDocument } from './schema';
 
 /** Typy súborov, ktoré vie Claude priamo čítať. */
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 export const PDF_TYPE = 'application/pdf';
 
-export const EXTRACTION_MODEL = 'claude-opus-5-5';
+// Haiku 5.5: najlacnejší aktuálny model ($0,10 / $0,50 za 1M tokenov vstup/výstup pri promptoch do 100K),
+// určený práve na vyťažovanie. Haiku nemá server-side fallback pri odmietnutí — chyba sa ukáže používateľovi.
+export const EXTRACTION_MODEL = 'claude-haiku-5-5';
 
 export interface ExtractionContext {
   /** Firma, pre ktorú sa doklad spracúva — podľa nej sa určí prijatý vs. vydaný doklad. */
@@ -39,7 +41,7 @@ export async function extractDocument(
   ctx: ExtractionContext,
 ): Promise<{ data: ExtractedDocument; model: string }> {
   const b64 = file.data.toString('base64');
-  let source: Anthropic.Beta.BetaContentBlockParam;
+  let source: Anthropic.ContentBlockParam;
   if (file.mime === PDF_TYPE) {
     source = { type: 'document', source: { type: 'base64', media_type: PDF_TYPE, data: b64 } };
   } else if ((IMAGE_TYPES as readonly string[]).includes(file.mime)) {
@@ -52,12 +54,10 @@ export async function extractDocument(
   }
 
   const client = new Anthropic();
-  const response = await client.beta.messages.parse({
+  const response = await client.messages.parse({
     model: EXTRACTION_MODEL,
     max_tokens: 16000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    output_config: { effort: 'medium', format: betaZodOutputFormat(extractedDocument) },
+    output_config: { effort: 'medium', format: zodOutputFormat(extractedDocument) },
     system: SYSTEM,
     messages: [
       {

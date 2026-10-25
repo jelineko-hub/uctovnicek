@@ -1,5 +1,10 @@
 # Changelog
 
+## Téma v0.004 — Lacnejší model na vyťažovanie
+- Vyťažovanie dokladov prepnuté z `claude-opus-5-5` ($4 / $20 za 1M tokenov) na `claude-haiku-5-5`
+  ($0,10 / $0,50 pri promptoch do 100K). Bez server-side fallbacku (Haiku ho nemá), štruktúrovaný výstup cez
+  `client.messages.parse` + `zodOutputFormat`.
+
 ## Téma v0.003 — F1: nahrávanie a vyťažovanie dokladov
 - Detail firmy `/app/[companyId]` so záložkami: Nespracované, Bločky, Prijaté/Vydané faktúry, Pokladňa, Iné, Partneri.
 - Nahrávanie: drag & drop, výber súborov, fotenie mobilom; fotky sa v prehliadači zmenšia na 2400 px (JPEG),
