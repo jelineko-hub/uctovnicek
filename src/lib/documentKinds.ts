@@ -42,6 +42,16 @@ export const STATUSES = {
 } as const;
 export type Status = keyof typeof STATUSES;
 
+/** Odkiaľ doklad prišiel (`documents.source`, povinný). */
+export const SOURCES = {
+  upload: 'Nahraté',
+  camera: 'Odfotené',
+  email: 'E-mail',
+  einvoice: 'E-faktúra',
+  manual: 'Zadané ručne',
+} as const;
+export type Source = keyof typeof SOURCES;
+
 export const PAYMENT_METHODS = {
   transfer: 'Prevodom',
   card: 'Kartou',

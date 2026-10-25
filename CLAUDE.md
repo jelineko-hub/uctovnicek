@@ -48,3 +48,6 @@ Funkčný vzor: Doklado (analýza v `docs/analyza-doklado.md`) — preberáme fu
 - Externé volania (Claude, eKasa, e-mail provider) idú cez tabuľku `jobs` (`pending → running → done|failed`,
   `attempts`, dobeh cez Vercel Cron); synchrónne ostáva len export XML a párovanie banky.
 - `documents.source` je povinný: `upload | camera | email | einvoice | manual` — každé založenie dokladu ho nastaví.
+- Stavy dokladu: prechody a oprávnenia len cez `lib/documentStatus.ts`; exportovaný/archivovaný doklad je zamknutý
+  (DB trigger povolí len stav, internú poznámku a technické polia) — nový stĺpec, ktorý sa smie meniť po exporte, pridaj do triggera.
+- Duplicity: `lib/duplicates.ts` (`refreshDuplicateOf` po každej zmene čísla/sumy/dátumu/partnera); hash súboru pri každom novom zdroji.

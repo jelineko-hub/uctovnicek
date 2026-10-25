@@ -1,24 +1,36 @@
 import { notFound } from 'next/navigation';
 import { DocumentEditor, type EditorDocument } from '@/components/DocumentEditor';
 import { DOCUMENTS_BUCKET } from '@/lib/db';
+import { isRole } from '@/lib/documentStatus';
 import { createClient } from '@/lib/supabase-server';
 
 export default async function DocumentPage({ params }: { params: Promise<{ companyId: string; docId: string }> }) {
   const { companyId, docId } = await params;
   const supabase = await createClient();
-  const [{ data: doc }, { data: lines }, { data: files }] = await Promise.all([
+  const { data: { user } } = await supabase.auth.getUser();
+  const [{ data: doc }, { data: lines }, { data: files }, { data: member }] = await Promise.all([
     supabase
       .from('documents')
       .select(
-        'id, company_id, kind, subtype, status, partner_snapshot, original_number, variable_symbol, constant_symbol, ekasa_uid, issue_date, tax_point_date, due_date, currency, total_amount, payment_method, vat_mode, note, internal_note, ocr_raw, ocr_confidence',
+        'id, company_id, kind, subtype, status, partner_snapshot, original_number, variable_symbol, constant_symbol, ekasa_uid, issue_date, tax_point_date, due_date, currency, total_amount, payment_method, vat_mode, note, internal_note, ocr_raw, ocr_confidence, source, duplicate_of, duplicate_ignored',
       )
       .eq('id', docId)
       .eq('company_id', companyId)
       .maybeSingle(),
     supabase.from('document_lines').select('name, quantity, unit, unit_price, vat_rate').eq('document_id', docId).order('position'),
     supabase.from('document_files').select('storage_path, mime').eq('document_id', docId).order('created_at'),
+    supabase.from('company_members').select('role').eq('company_id', companyId).eq('user_id', user?.id ?? '').maybeSingle(),
   ]);
   if (!doc) notFound();
+
+  const { data: original } =
+    doc.duplicate_of && !doc.duplicate_ignored
+      ? await supabase
+          .from('documents')
+          .select('id, original_number, issue_date, status')
+          .eq('id', doc.duplicate_of)
+          .maybeSingle()
+      : { data: null };
 
   const file = files?.[0];
   const signed = file
@@ -41,5 +53,12 @@ export default async function DocumentPage({ params }: { params: Promise<{ compa
     })),
   };
 
-  return <DocumentEditor doc={editorDoc} file={signed && file ? { url: signed, mime: file.mime ?? '' } : null} />;
+  return (
+    <DocumentEditor
+      doc={editorDoc}
+      role={isRole(member?.role) ? member.role : null}
+      duplicateOf={original}
+      file={signed && file ? { url: signed, mime: file.mime ?? '' } : null}
+    />
+  );
 }

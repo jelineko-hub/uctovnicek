@@ -1,5 +1,19 @@
 # Changelog
 
+## Téma v0.006 — E2: stav dokladu, zámok po exporte, duplicity
+- `lib/documentStatus.ts`: povolené prechody stavov a kto ich smie (majiteľ po „pripravený", schvaľovateľ po
+  „schválený", účtovník všetko, len-čítanie nič) + testy. Server actions a editor ho používajú; nová akcia
+  `changeStatus` (Schváliť, Zamietnuť, Vrátiť na kontrolu, Vrátiť medzi nespracované, Archivovať).
+- Zámok: exportovaný/archivovaný doklad sa nedá upraviť ani zmazať — editor len na čítanie s vysvetlením,
+  server action vráti chybu, DB trigger `documents_reject_locked_update` odmietne zmenu iných polí než stav,
+  interná poznámka a technické polia; `document_lines` zamknutého dokladu tiež. `locked_at` nastavuje trigger.
+- Duplicity: (a) prehliadač spočíta SHA-256 súboru pred uploadom; ak rovnaký súbor vo firme už je → „Už nahraté"
+  s odkazom, „Nahrať aj tak" / „Nenahrávať". (b) po vyťažení a uložení `lib/duplicates.ts` hľadá starší doklad
+  s rovnakým IČO + číslom + sumou + dátumom → v editore pruh „Možný duplikát" s odkazom, „Nie je to duplikát".
+- `documents.source` (povinný; upload / camera zatiaľ z nahrávania), zobrazený v editore.
+- Migrácia `20261025120000_e2_status_duplicates.sql` (aplikovaná): `source`, `locked_at`, `duplicate_of`,
+  `duplicate_ignored`, indexy na kľúč duplicity a `document_files(company_id, sha256)`, triggery zámku.
+
 ## Téma v0.005 — E1: koncept a plán etáp
 - `docs/koncept-roadmapa.md`: koncept (most firma ↔ externá účtovníčka), výber funkcií z Doklado, priority P0–P3,
   architektonické rozhodnutia, etapy E1–E11, otvorené otázky, súhrn zmien dátového modelu.

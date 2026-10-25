@@ -67,9 +67,9 @@ fieldset:disabled input, fieldset:disabled select, fieldset:disabled textarea { 
   display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.78rem;
   background: var(--border); color: var(--fg); white-space: nowrap;
 }
-.badge.unprocessed, .badge.uploading, .badge.extracting { background: #f4e3b5; color: #6b4f00; }
+.badge.unprocessed, .badge.uploading, .badge.extracting, .badge.duplicate { background: #f4e3b5; color: #6b4f00; }
 .badge.ready, .badge.done { background: #cfe8da; color: #1f5a3f; }
-.badge.approved, .badge.exported { background: #d4e2f7; color: #1f3f6b; }
+.badge.approved, .badge.exported, .badge.archived { background: #d4e2f7; color: #1f3f6b; }
 .badge.rejected, .badge.error { background: #f5d0cc; color: #7a2018; }
 
 .table-wrap { overflow-x: auto; }
@@ -107,3 +107,5 @@ fieldset:disabled input, fieldset:disabled select, fieldset:disabled textarea { 
 .error { color: #c0392b; }
 .success { color: var(--accent); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
+.row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 4px; }
+.row-actions button.link { color: var(--accent); text-decoration: underline; }

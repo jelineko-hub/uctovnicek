@@ -1,15 +1,19 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
 import {
+  changeStatus,
   confirmDocument,
   deleteDocument,
-  reopenDocument,
+  ignoreDuplicate,
   saveDocument,
   type DocumentInput,
 } from '@/app/app/[companyId]/doklady/actions';
-import { KINDS, PAYMENT_METHODS, STATUSES, SUBTYPES, VAT_MODES, VAT_RATES, isKey } from '@/lib/documentKinds';
+import { KINDS, PAYMENT_METHODS, SOURCES, STATUSES, SUBTYPES, VAT_MODES, VAT_RATES, isKey, type Status } from '@/lib/documentKinds';
+import { allowedTransitions, canDelete, canEdit, editBlockedReason, type Role } from '@/lib/documentStatus';
+import { date } from '@/lib/format';
 import { money } from '@/lib/format';
 import { isValidIban } from '@/lib/iban';
 import { round2, totals } from '@/lib/vat';
@@ -47,9 +51,25 @@ export interface EditorDocument {
   note: string | null;
   internal_note: string | null;
   ocr_confidence: number | null;
+  source: string;
   ocr_notes: string | null;
   printed_vat: { rate: number; base: number; vat: number }[];
   lines: { name: string; quantity: number; unit: string | null; unit_price: number; vat_rate: number }[];
+}
+
+/** Tlačidlá ručných zmien stavu (potvrdenie a export majú vlastné akcie). */
+const TRANSITION_LABELS: Partial<Record<Status, string>> = {
+  approved: 'Schváliť',
+  rejected: 'Zamietnuť',
+  unprocessed: 'Vrátiť medzi nespracované',
+  archived: 'Archivovať',
+};
+
+export interface DuplicateInfo {
+  id: string;
+  original_number: string | null;
+  issue_date: string | null;
+  status: string;
 }
 
 type LineDraft = { name: string; quantity: string; unit: string; unit_price: string; vat_rate: string };
@@ -72,7 +92,17 @@ const num = (s: string) => {
 };
 const str = (n: number | null | undefined) => (n == null ? '' : String(n));
 
-export function DocumentEditor({ doc, file }: { doc: EditorDocument; file: { url: string; mime: string } | null }) {
+export function DocumentEditor({
+  doc,
+  role,
+  duplicateOf,
+  file,
+}: {
+  doc: EditorDocument;
+  role: Role | null;
+  duplicateOf: DuplicateInfo | null;
+  file: { url: string; mime: string } | null;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
@@ -182,7 +212,13 @@ export function DocumentEditor({ doc, file }: { doc: EditorDocument; file: { url
 
   const setLine = (i: number, patch: Partial<LineDraft>) =>
     setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
-  const editable = doc.status !== 'exported';
+  const editable = canEdit(doc.status, role);
+  const blockedReason = editBlockedReason(doc.status, role);
+  const transitions = allowedTransitions(doc.status, role).filter(
+    (t) => t !== 'exported' && !(doc.status === 'unprocessed' && t === 'ready'),
+  );
+  const transitionLabel = (t: Status) =>
+    t === 'ready' ? 'Vrátiť na kontrolu' : TRANSITION_LABELS[t] ?? STATUSES[t];
 
   return (
     <div className="doc-layout">
@@ -200,10 +236,42 @@ export function DocumentEditor({ doc, file }: { doc: EditorDocument; file: { url
       <section className="doc-form">
         <div className="row-between">
           <span className={`badge ${doc.status}`}>{isKey(STATUSES, doc.status) ? STATUSES[doc.status] : doc.status}</span>
-          {doc.ocr_confidence != null && (
-            <span className="muted small">Istota vyťaženia {Math.round(doc.ocr_confidence * 100)} %</span>
-          )}
+          <span className="muted small">
+            {isKey(SOURCES, doc.source) ? SOURCES[doc.source] : doc.source}
+            {doc.ocr_confidence != null && ` · istota vyťaženia ${Math.round(doc.ocr_confidence * 100)} %`}
+          </span>
         </div>
+        {blockedReason && <p className="note">{blockedReason}</p>}
+        {duplicateOf && (
+          <div className="warnings dup-banner">
+            <strong>Možný duplikát:</strong> rovnaké číslo, suma a dátum ako{' '}
+            <Link href={`/app/${doc.company_id}/doklady/${duplicateOf.id}`}>
+              doklad {duplicateOf.original_number ?? ''} z {date(duplicateOf.issue_date)}
+            </Link>{' '}
+            ({isKey(STATUSES, duplicateOf.status) ? STATUSES[duplicateOf.status].toLowerCase() : duplicateOf.status}).
+            {role && role !== 'viewer' && (
+              <div className="row-actions">
+                <button type="button" className="link" disabled={pending} onClick={() => run(() => ignoreDuplicate(doc.id), 'Označené — nie je to duplikát.')}>
+                  Nie je to duplikát
+                </button>
+                {canDelete(doc.status, role) && (
+                  <button
+                    type="button"
+                    className="link"
+                    disabled={pending}
+                    onClick={() => {
+                      if (confirm('Zmazať tento doklad aj so súborom?')) {
+                        run(() => deleteDocument(doc.id), 'Zmazané.', () => router.push(`/app/${doc.company_id}`));
+                      }
+                    }}
+                  >
+                    Zmazať tento doklad
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {doc.ocr_notes && <p className="note">{doc.ocr_notes}</p>}
 
         <fieldset className="card grid2" disabled={!editable}>
@@ -308,35 +376,46 @@ export function DocumentEditor({ doc, file }: { doc: EditorDocument; file: { url
 
         {message && <p className={message.type === 'error' ? 'error' : 'success'}>{message.text}</p>}
 
-        {editable && (
+        {(editable || transitions.length > 0) && (
           <div className="actions">
-            {doc.status === 'unprocessed' ? (
+            {editable && doc.status === 'unprocessed' && (
               <button type="button" disabled={pending} onClick={() => run(() => confirmDocument(doc.id, input()), 'Doklad potvrdený.', () => router.push(`/app/${doc.company_id}`))}>
                 Potvrdiť doklad
               </button>
-            ) : null}
-            <button type="button" className="secondary" disabled={pending} onClick={() => run(() => saveDocument(doc.id, input()), 'Uložené.')}>
-              Uložiť
-            </button>
-            {doc.status === 'unprocessed' ? (
-              <button type="button" className="secondary" disabled={pending} onClick={() => { if (confirm('Vyťažiť znova? Ručné úpravy sa prepíšu.')) reextract(); }}>Znova vyťažiť</button>
-            ) : (
-              <button type="button" className="secondary" disabled={pending} onClick={() => run(() => reopenDocument(doc.id), 'Doklad vrátený medzi nespracované.')}>
-                Vrátiť medzi nespracované
+            )}
+            {editable && (
+              <button type="button" className="secondary" disabled={pending} onClick={() => run(() => saveDocument(doc.id, input()), 'Uložené.')}>
+                Uložiť
               </button>
             )}
-            <button
-              type="button"
-              className="danger"
-              disabled={pending}
-              onClick={() => {
-                if (confirm('Naozaj zmazať doklad aj so súborom?')) {
-                  run(() => deleteDocument(doc.id), 'Zmazané.', () => router.push(`/app/${doc.company_id}`));
-                }
-              }}
-            >
-              Zmazať
-            </button>
+            {editable && doc.status === 'unprocessed' && (
+              <button type="button" className="secondary" disabled={pending} onClick={() => { if (confirm('Vyťažiť znova? Ručné úpravy sa prepíšu.')) reextract(); }}>Znova vyťažiť</button>
+            )}
+            {transitions.map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={t === 'approved' ? undefined : 'secondary'}
+                disabled={pending}
+                onClick={() => run(() => changeStatus(doc.id, t), `Stav: ${STATUSES[t]}.`)}
+              >
+                {transitionLabel(t)}
+              </button>
+            ))}
+            {canDelete(doc.status, role) && (
+              <button
+                type="button"
+                className="danger"
+                disabled={pending}
+                onClick={() => {
+                  if (confirm('Naozaj zmazať doklad aj so súborom?')) {
+                    run(() => deleteDocument(doc.id), 'Zmazané.', () => router.push(`/app/${doc.company_id}`));
+                  }
+                }}
+              >
+                Zmazať
+              </button>
+            )}
             {pending && <span className="muted small">Pracujem…</span>}
           </div>
         )}

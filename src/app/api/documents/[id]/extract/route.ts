@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { DOCUMENTS_BUCKET } from '@/lib/db';
+import { refreshDuplicateOf } from '@/lib/duplicates';
 import { ExtractionError, extractDocument } from '@/lib/extraction/extract';
 import { toDocument } from '@/lib/extraction/toDocument';
 import { createClient } from '@/lib/supabase-server';
@@ -79,6 +80,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     company_id: doc.company_id,
     diff: { action: 'extracted', model: result.model },
   });
+  const duplicateOf = await refreshDuplicateOf(supabase, id);
 
-  return NextResponse.json({ ok: true, kind: patch.kind, notes: result.data.notes });
+  return NextResponse.json({ ok: true, kind: patch.kind, notes: result.data.notes, duplicate_of: duplicateOf });
 }

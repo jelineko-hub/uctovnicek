@@ -1,4 +1,4 @@
 /**
  * Jediný zdroj verzie aplikácie. Bumpni pri každom commite.
  */
-export const APP_VERSION = 'v0.005';
+export const APP_VERSION = 'v0.006';
