@@ -1,0 +1,380 @@
+Dokumentace k XML exportům/importům dokladů verze 2.0 - agenda Faktury vydané  
+----------------------------------------------------------------------------------------------------
+(vytvořeno ve verzi MRP-K/S 6.75(001), 24.02.2025)
+
+Struktura XML verze 2.0 je tvořena obálkou <MRPKSData> následovanou hlavním uzlem dle agendy
+(např. <IssuedInvoices>, <IncomingInvoices>, <CashVouchers>, <AccountingItems> ...)
+Příklad :
+<MRPKSData>
+  <IssuedInvoices>
+    <Invoice>
+     ...
+     ...
+    </Invoice>
+  </IssuedInvoices>
+</MRPKSData>
+
+
+Databáze MRP-K/S pracuje v kódové stránce Windows-1250. Přestože je tedy XML zpravidla kódováno v UTF-8,
+elementy by neměly obsahovat znaky, které se v kódování Windows-1250 nevyskytují.
+
+Popis elementů
+==============
+
+====================================================================================================
+Hlavičkové údaje dokladu. Cesta (XPath uzel): IssuedInvoices/Invoice
+====================================================================================================
+DocumentNumber                 string (10)                     Číslo dokladu, jednoznačný identifikátor, nejsou povoleny 
+                                                               duplicity.                                        
+UUID                           string (36)                     UUID/GUID - jednoznačný identifikátor dokladu, nejsou 
+                                                               povoleny duplicity. Pokud nebude při importu uveden, 
+                                                               databázový server UUID přidělí.                   
+IssueDate                      date                            Dat.vystavení                                     
+CurrencyCode                   string (3)                      Měna dokladu. Odpovídá číselníku měn. Např. "CZK", 
+                                                               "EUR", "USD" apod.                                
+ValuesWithTax                  boolean                         Způsob zadávání částek (CENAMJ) v položkách dokladu. 
+                                                               "T" - částky zadávány v cenách s DPH, "F" - částky 
+                                                               zadávány v cenách BEZ DPH                         
+TaxCode                        integer                         Typ DPH, odpovídá číselníku Typy DPH. Např. Tuzemské 
+                                                               uskut. pln. - 41 (pro SK verzi 10) , Tuzemské přij.pln. 
+                                                               - 71 (pro SK verzi 40), Nedaňový doklad uskutečněný 
+                                                               - 19 , Nedaňový doklad přijatý - 39               
+DocType                        string (2)                      Typ dokladu, odpovídá číselníku Typy dokladů. Např. 
+                                                               " "- běžný daňový doklad, "D"-dobropis, "V"-vrubopis,..
+ZeroTaxRateAmount              decimal (15,2)                  Částka Osvobozeno - hodnota plnění osvobozených od 
+                                                               DPH (v lokální měně)                              
+ReducedTaxRateAmount           decimal (15,2)                  Suma částek základů dph pro snížené sazby (v lokální 
+                                                               měně)                                             
+BaseTaxRateAmount              decimal (15,2)                  Suma částek základů dph pro základní sazby (v lokální 
+                                                               měně)                                             
+RoundingAmount                 decimal (15,2)                  Částka MIMODPH - hodnota nedaněná (v lokální měně)
+ReducedTaxRateTax              decimal (15,2)                  Suma částek DPH pro snížené sazby (v lokální měně)
+BaseTaxRateTax                 decimal (15,2)                  Suma částek DPH pro základní sazby (v lokální měně)
+TotalWithTaxCurr               decimal (15,2)                  Celková částka v zahr.měně                        
+TaxPointDate                   date                            Daň.povinnost                                     
+DeliveryDate                   date                            Datum dodání /Datum pro Kontrolní hlášení         
+DoubleEntryBookkeepingCode     decimal (15,3)                  Číslo účetní předkontace, nepovinné. Odkazuje do číselníku 
+                                                               "Účetní předkontace". Pro účetnictví (podvojné).  
+SingleEntryBookkeepingCode     integer                         Kód pohybu zaúčtování pro Daňovou evidenci (Syntet.)
+SingleEntryBookkeepingSubCode  integer                         Kód pohybu zaúčtování pro Daňovou evidenci (analyt.)
+OriginalDocumentNumber         string (50)                     Původní číslo dokladu/Evidenční číslo daň.dokladu 
+                                                               (číslo v evidenci vystavitele dokladu).           
+ControlStatement_Leasing       boolean                         Příznak leasingu nad limit 10.000,- pro Kontrolní 
+                                                               hlášení v CZ verzi programu                       
+TotalWeight                    decimal (15,6)                  Hmotnost zboží za doklad celkem                   
+CostCentre                     string (6)                      Nákladové středisko. V případě vyplnění musí odpovídat 
+                                                               uživatelskému číselníku Střediska. Výchozí hodnota 
+                                                               "0"                                               
+ContractNumber                 string (15)                     Zakázka. V případě vyplnění, musí odpovídat uživatelskému 
+                                                               číselníku Zakázky. Výchozí hodnota "0"            
+VatRegime                      integer                         Režim DPH:0-Běžný tuzemský,1-Registrace v EU,2-OSS(MOSS)
+VatCountry                     string (2)                      Stát DPH - kód členské země EU. Pro režim DPH=0(běžný 
+                                                               tuzemský) vždy "CZ" pro českou verzi nebo "SK" pro 
+                                                               slovenskou verzi programu                         
+VatNumber                      string (17)                     VAT reg.č.(DIČ) pro Režimy DPH 1 (EU) a 2(MOSS). Registrační 
+                                                               číslo přidělené k placení DPH v jiném členském státě 
+                                                               EU. Pokud je uvedeno, musí odpovídat číselníku "Registrace 
+                                                               plátců v zemích EU".                              
+EURExchangeRate                decimal (15,6)                  Kurz Měna dokladu/EUR. Pro vystavené doklady v režimu 
+                                                               OSS(MOSS) v CZ verzi programu                     
+EURExchangeRateAmount          decimal (15,6)                  Kurz Měna dokladu/EUR - počet jednotek. Pro vystavené 
+                                                               doklady v režimu OSS(MOSS) v CZ verzi programu    
+Note                           string (32768)                  Poznámka                                          
+ImportParams/ReCalcTotals      decimal (1,0)                   Volitelný parametr pro nastavení přepočtu celkových 
+                                                               částek po naimportování. 0 - Nespecifikováno (dle 
+                                                               profilu), 1 - Nepřepočítat, 2 - Přepočítat        
+CalcParams                     string (200)                    Parametry výpočtu dokladu - počet.des.míst, způsob 
+                                                               zaokrouhlení, atd...                              
+UserField1                     string (40)                     Uživ.pole 1                                       
+UserField2                     string (40)                     Uživ.pole 2                                       
+UserField3                     string (40)                     Uživ.pole 3                                       
+UserField4                     string (40)                     Uživ.pole 4                                       
+UserField5                     string (40)                     Uživ.pole 5                                       
+DocumentNumberPrefix           string (10)                     Prefix číselné řady. Umožňuje očíslovat/zařadit doklad 
+                                                               do zvolené řady při importu. Pokud je prefix uveden, 
+                                                               odpovídající řada musí existovat v uživatelském číselníku.
+VariableSymbol                 string (10)                     Variabilní symbol                                 
+ConstantSymbol                 string (8)                      Konst.symbol                                      
+CreditNoteOriginalNumber       string (50)                     Původní číslo opravovaného dokladu - číslo dobropisované/vrubopisované 
+                                                               faktury . Důležité v SK verzi pro DPH Kontrolný výkaz
+DocumentNumberCreditNote       string (10)                     Číslo dokladu (<DocumentNumber>), který je tímto dokladem 
+                                                               dobropisován                                      
+DocumentNumberDebitNote        string (10)                     Číslo dokladu (<DocumentNumber>), který je tímto dokladem 
+                                                               vrubopisován                                      
+PaymentDueDate                 date                            Dat.splatnosti                                    
+CurrRateAmount                 decimal (15,6)                  Kurz - počet jednotek. U dokladů v lokální(domácí) 
+                                                               měně = 1.0000                                     
+CurrRate                       decimal (15,6)                  Kurz. U dokladů v lokální(domácí) měně = 1.0000   
+PaidAmount                     decimal (15,2)                  Celkem zaplaceno. Pomocná počítaná položka. Suma úhrad 
+                                                               v lokální měně                                    
+PaidAmountCurr                 decimal (15,2)                  Celkem zaplaceno v měně dokladu. Pomocná počítaná 
+                                                               položka. Suma úhrad v měně, ve které je doklad vystaven
+SpecificSymbol                 string (10)                     Specif.symb.                                      
+InvoiceType                    string (1)                      Druh faktury: "F"-běžná, "X"-předfaktura, "P"-penalizační
+DeliveryNoteID                 string (10)                     Č.dod.listu                                       
+ProformaInvoiceID              string (10)                     Číslo předfaktury                                 
+PaymentMeansCode               string (10)                     Forma úhrady                                      
+DeliveryTypeCode               string (10)                     Způsob dopravy                                    
+OrderNumber                    string (20)                     Číslo objednávky                                  
+OrderDate                      date                            Dat.objednávky                                    
+PaymentInvoiceID               string (10)                     Příznak zaplacení předfaktury. Číslo daň.dokladu, 
+                                                               který vznikl z této předfaktury funkcí "..označit 
+                                                               předfakturu za zaplacenou". Z externích systémů neplňte.
+OriginalOrderNumber            string (50)                     Původní číslo objednávky (číslo objednávky odběratele 
+                                                               - vystavitele objednávky)                         
+RecapitulativeStatementCode    string (1)                      Kód plnění pro Souhrnné hlášení k DPH. "" (neuvedeno) 
+                                                               - tuzemské plnění/bez rozlišení, "0"-Dodání zboží 
+                                                               do jiného čl.státu, "1"-Přemístění obch. majetku, 
+                                                               "2" - Dodání zboží třístranný obchod, "3" - Poskytnutí 
+                                                               služby                                            
+Discount                       decimal (15,2)                  Procentuální výše slevy za celý doklad.           
+
+PaidAmount                     decimal (15,2)                  Celkem zaplaceno. Pomocná položka. Suma úhrad v lokální 
+                                                               měně. (Pouze pro Vizuální účetní systém, pro MRP-K/S 
+                                                               nepoužívat)                                       
+HeadText                       string (30)                     Popis v hlavičce faktury. (Pouze pro Vizuální účetní 
+                                                               systém, pro MRP-K/S nepoužívat)                   
+HeadNote                       string (30)                     Poznámka v hlavičce faktury. (Pouze pro Vizuální účetní 
+                                                               systém, pro MRP-K/S nepoužívat)                   
+IBAN                           string (34)                     Mezinárodní číslo bankovního účtu (bez mezer). (Pouze 
+                                                               pro Vizuální účetní systém, pro MRP-K/S nepoužívat)
+Poznámka k celkovým částkám
+Elementy <BaseTaxRateAmount>, <BaseTaxRateTax>, <ReducedTaxRateAmount>, <ReducedTaxRateTax> obsahují sumu částek ve všech úrovních sazeb - první, druhá snížená apod. (pokud to legislativa umožňuje)
+Pokud daňový doklad obsahuje více základních čí více snížených sazeb dph, musí XML obsahovat jejich podrobný rozpis v uzlu IssuedInvoices/Invoice/SumValues
+
+Rozšířený popis elementu CalcParams
+Parametry výpočtu dokladu jsou řetězec složený z dílčích parametrů ve tvaru [Zkratka_Dílčího_Parametru]=[Hodnota_Dílčího_Parametru] oddělených středníkem.
+Žádný z dílčích parametrů není povinný a na jejich pořadí uvnitř celého řetězce nezáleží.
+Příklad řetězce : UPDP=2;VATRU=0.10;VATRM=0;TRU=1.00;TRM=0;VATCA=1;VATCUPA=0;TRD=1;TRDCA=1;VATFRB=0
+Jednotlivé dílčí parametry jsou tyto:
+UPDP - UnitPriceDecimalPlaces ... Počet desetinných míst Ceny za měrnou jednotku (rozsah 1..4, pro SK verzi 1..6)
+VATRU -  VATRoundingUnit ... Zaokrouhlování DPH - jednotky (např. 1.00, 0.10, 0.01). Pouze pro CZ verzi.
+VATRM - VATRoundingMethod ... Zaokrouhlování DPH - způsob (0 - přirozeně, 1 - dolů, 2 - nahoru, 3 - bankéřské zaokrouhlení). Pouze pro CZ verzi.
+TRU - TotalRoundingUnit ... Zaokrouhlování celkové částky dokladu - jednotky (např. 1.00, 0.10, 0.01)
+TRM - TotalRoundingMethod ... Zaokrouhlování celkové částky - způsob (0 - přirozeně, 1 - dolů, 2 - nahoru, 3 - bankéřské zaokrouhlení)
+VATCA - VATCoefficientApplication - Pro výpočet celkové DPH použít Koeficient DPH (0 - nepoužít, 1 - použít). Pouze pro CZ verzi. 
+VATCUPA - VATCoefficientUnitPriceApplication - Pro výpočet jednotkové DPH použít Koeficient DPH (0 - nepoužít, 1 - použít). Pouze pro CZ verzi. 
+TRD - TotalRoundingDissolving - Rozpuštění celkového zaokrouhlení (0 - rozpustit do částky MIMODPH, 1 - rozpustit do ZAKLAD+DPH)
+TRDCA - TotalRoundingDissolvingCoefficientApplication -  Pro rozpuštění zaokrouhlení použít Koeficient DPH (0 - podle způsobu výpočtu dokladu, 1 - vždy použít koeficient). Pouze pro CZ verzi a TRD=1.
+VATFRB - VATFromRoundedBase -   Celkovou DPH počítat ze zaokrouhleného základu (0 - z nezaokrouhleného, 1 - ze zaokrouhleného). Pouze SK verze.
+
+====================================================================================================
+Firemní údaje obchodního partnera (protistrany). Cesta (XPath uzel): IssuedInvoices/Invoice
+====================================================================================================
+Company/CompanyId              string (12)                     IČO                                               
+Company/AddressId              string (50)                     ID adresy - jednoznačný identifikátor adresy. Pro 
+                                                               výměnu dat s externím systémem (např. eshop)      
+Company/Name                   string (50)                     Firma                                             
+Company/Name2                  string (50)                     Firma 2                                           
+Company/CustomerName           string (30)                     Jméno                                             
+Company/Street                 string (30)                     Ulice                                             
+Company/City                   string (30)                     Město                                             
+Company/Country                string (30)                     Stát                                              
+Company/CountryCode            string (2)                      Kód státu dle číselníku států. Např. CZ - Česká republika, 
+                                                               SK - Slovensko                                    
+Company/ShortNote              string (30)                     Jiné - krátká poznámka k adrese                   
+Company/ZipCode                string (15)                     PSČ                                               
+Company/VatNumber              string (17)                     CZ verze: DIČ dle CZ legislativy (VAT identification 
+                                                               number), formát čísla např. CZ99999999, SK9999999999, 
+                                                               DE999999999. Viz: http://ec.europa.eu/taxation_customs/vies/faq.html?locale=en#item_11. 
+                                                               SK verze: DIČ dle SK legislativy, např. 1999999999, 
+                                                               2999999999                                        
+Company/VatNumberSK            string (14)                     CZ verze: nepoužívá se. SK verze: IČ DPH (VAT identification 
+                                                               number). Formát čísla např. CZ99999999, SK9999999999, 
+                                                               DE999999999. Viz: http://ec.europa.eu/taxation_customs/vies/faq.html?locale=en#item_11
+Company/Phone                  string (30)                     Telefon                                           
+Company/Phone2                 string (30)                     Telefon 2                                         
+Company/Phone3                 string (30)                     Telefon 3                                         
+Company/Fax                    string (30)                     Fax                                               
+Company/Email                  string (256)                    Email                                             
+Company/Note                   string (32768)                  Poznámka                                          
+Company/NaturalPerson          boolean                         Příznak typu firmy - "T" - fyzická osoba, "F" - právnická 
+                                                               osoba                                             
+Company/AddressFormationDate   date                            Datum zařazení/zaevidování/vzniku záznamu         
+Company/UserField1             string (40)                     Uživ.pole 1                                       
+Company/UserField2             string (40)                     Uživ.pole 2                                       
+Company/UserField3             string (40)                     Uživ.pole 3                                       
+Company/UserField4             string (40)                     Uživ.pole 4                                       
+Company/UserField5             string (40)                     Uživ.pole 5                                       
+
+====================================================================================================
+Firemní údaje obchodního partnera (protistrany) - bankovní účty. Cesta (XPath uzel): IssuedInvoices/Invoice/Company/BankAccounts/BankAccount
+Nepovinný uzel
+====================================================================================================
+Name                           string (100)                    Název banky                                       
+AccountNumber                  string (18)                     Číslo účtu ve formátu 6+10. Vyplňuje se pouze pro 
+                                                               CZ nebo SK                                        
+BankCode                       string (12)                     Numerický kód banky. Vyplňuje se pouze pro CZ nebo 
+                                                               SK                                                
+IBAN                           string (34)                     Mezinárodní číslo bankovního účtu (bez mezer)     
+CurrencyCode                   string (3)                      Měna účtu                                         
+BIC                            string (12)                     BIC - mezinárodní kód banky                       
+DefaultForDoc                  boolean                         Označení výchozího bankovního účtu pro tento doklad. 
+                                                               Význam pouze pro Faktury přijaté a Ostatní pohledávky. 
+                                                               Na takto označený účet z kolekce účtů má být směřována 
+                                                               platba.                                           
+
+====================================================================================================
+Položky(řádky) dokladu. Cesta (XPath uzel): IssuedInvoices/Invoice/Items/Item
+====================================================================================================
+Description                    string (100)                    Text                                              
+RowType                        integer                         Typ řádku:1-Finanční,2-Textový řádek              
+TaxCode                        integer                         Typ DPH, odpovídá číselníku Typy DPH. Např. Tuzemské 
+                                                               uskut. pln. - 41 (pro SK verzi 10) , Tuzemské přij.pln. 
+                                                               - 71 (pro SK verzi 40), Nedaňový doklad uskutečněný 
+                                                               - 19 , Nedaňový doklad přijatý - 39               
+ItemType                       string (10)                     Typ položky, odpovídá uživatelskému číselníku Typy 
+                                                               položek. Nepovinné.                               
+UnitCode                       string (3)                      Měrná jednotka - např. "ks", "kg", "t", "m2" apod.
+Quantity                       decimal (15,6)                  Počet MJ                                          
+UnitPrice                      decimal (15,6)                  Cena MJ v měně dokladu bez DPH. Platí (CenaMJ-SlevaMJ)*PocetMJ=Celkem 
+                                                               za řádek dokladu bez DPH                          
+TaxPercent                     decimal (15,2)                  Procentuální výše sazby DPH (0 = Osvobozeno, 99 = 
+                                                               MimoDPH)                                          
+TaxAmount                      decimal (15,6)                  Částka DPH za MJ v měně dokladu                   
+DiscountPercent                decimal (15,2)                  Procentuální výše slevy za položku dokladu. Pomocný 
+                                                               údaj, při výpočtu celkové částky dokladu se k němu 
+                                                               nepřihlíží. Podstatné je pole SLEVAMJ             
+UnitDiscount                   decimal (15,6)                  Sleva MJ v měně dokladu bez DPH. Platí vztah CenaMJ-SlevaMJ=Cena 
+                                                               za MJ po slevě bez DPH                            
+StockCardNumber                decimal (15,2)                  Číslo skladové karty, odpovídá uživatelskému seznamu 
+                                                               skladových karet. Pro import nepovinné.           
+CostCentre                     string (6)                      Nákladové středisko. V případě vyplnění musí odpovídat 
+                                                               uživatelskému číselníku Střediska. Výchozí hodnota 
+                                                               "0"                                               
+ContractNumber                 string (15)                     Zakázka. V případě vyplnění, musí odpovídat uživatelskému 
+                                                               číselníku Zakázky. Výchozí hodnota "0"            
+RowSumType                     integer                         Typ sumace řádku: 1-běžný, 2-odpočet záloh, 3-ReverseCharge(pouze 
+                                                               pro uskutečněná plnění), 4-Odpočet záloh ReverseCharge(pouze 
+                                                               pro uskutečněná plnění)                           
+TotalWeight                    decimal (15,6)                  Hmotnost za MJ                                    
+SubscriptionStartPeriod        date                            Datum od - rozsah období (nájem, předplatné za období 
+                                                               apod.). Pro rozúčtování nákladů/výnosů příštích období.
+SubscriptionEndPeriod          date                            Datum od - rozsah období (nájem, předplatné za období 
+                                                               apod.). Pro rozúčtování nákladů/výnosů příštích období.
+
+====================================================================================================
+Celkové součty dokladu. Cesta (XPath uzel): IssuedInvoices/Invoice/SumValues/SumValue
+Nepovinné, pokud daňový doklad obsahuje pouze jednu základní a jednu sníženou sazbu dph
+====================================================================================================
+TaxCode                        integer                         Typ DPH, odpovídá číselníku Typy DPH. Např. Tuzemské 
+                                                               uskut. pln. - 41 (pro SK verzi 10) , Tuzemské přij.pln. 
+                                                               - 71 (pro SK verzi 40), Nedaňový doklad uskutečněný 
+                                                               - 19 , Nedaňový doklad přijatý - 39               
+TaxType                        integer                         Typ sazby: 0-Nedefinováno, 1-Základní, 2-Snížená, 
+                                                               3-Osvobozeno, 4-MimoDph                           
+TaxPercent                     decimal (15,2)                  Procentuální výše sazby DPH (0 = Osvobozeno, 99 = 
+                                                               MimoDPH)                                          
+CurrencyCode                   string (3)                      Měna aktuálního součtového řádku. Tabulka obsahuje 
+                                                               povinně vždy součty pro lokální měnu (CZK) a variantně 
+                                                               součty pro zahraniční měnu(pro případ cizoměnových 
+                                                               dokladů)                                          
+Amount                         decimal (15,2)                  Částka základu                                    
+Tax                            decimal (15,2)                  Částka DPH                                        
+TaxCurrRateAmount              decimal (15,2)                  Částka základu - daňový kurz                      
+TaxCurrRateTax                 decimal (15,2)                  Částka DPH - daňový kurz                          
+ReverseChargeAmount            decimal (15,2)                  Částka základu - Reverse Charge - vypočítaná DPH (EU/dovoz/celnice)
+ReverseChargeTax               decimal (15,2)                  Částka DPH - Reverse Charge - vypočítaná DPH(EU/dovoz/celnice)
+TaxCurrRateReverseChargeAmount decimal (15,2)                  Částka základu - Reverse Charge - vypočítaná DPH(EU/dovoz/celnice) 
+                                                               - daňový kurz                                     
+TaxCurrRateReverseChargeTax    decimal (15,2)                  Částka DPH - Reverse Charge - vypočítaná DPH(EU/dovoz/celnice) 
+                                                               - daňový kurz                                     
+TaxApplied                     decimal (15,2)                  Částka odpočtu DPH (nároku na odpočet) u přijatého 
+                                                               plnění. Zpravidla shodné s částkou DPH/vypočítané 
+                                                               DPH na dokladu. 0=bez nároku na odpočet. Důležité 
+                                                               pro Přiznání k DPH, Kontrolní hlášení.            
+TaxTypeSTR                     integer                         Pro SK se přebírá celý typ sazby: A1- základní ,B1 
+                                                               - snížená, B2 - snížená , M- mimo (4), O- osvobozeno 
+                                                               (3). (Pouze pro Vizuální účetní systém, pro MRP-K/S 
+                                                               nepoužívat)                                       
+
+====================================================================================================
+Úhrady dokladu. Cesta (XPath uzel): IssuedInvoices/Invoice/Payments/Payment
+Nepovinný uzel
+Uzel BankAccount je nepovinný a má význam pouze pro úhrady bankou (PaymentType=1).
+====================================================================================================
+PaymentType                    integer                         Způsob úhrady: 0-neuvedeno, 1 - Bankou(převodem), 
+                                                               2 - Pokladnou, 3 - Kurzový rozdíl, 4 - Zápočet, 5 
+                                                               - Interní doklad                                  
+PaymentDate                    date                            Datum                                             
+DocumentNumber                 string (10)                     Doklad                                            
+Amount                         decimal (15,2)                  Částka úhrady v lokální měně                      
+AmountCurr                     decimal (15,2)                  Částka úhrady v měně úhrady                       
+AmountPaidDocumentCurr         decimal (15,2)                  Částka úhrady v měně dokladu(faktury)             
+CurrencyCode                   string (3)                      Měna úhrady                                       
+CurrRate                       decimal (15,6)                  Kurz. U dokladů v lokální(domácí) měně = 1.0000   
+CurrRateAmount                 decimal (15,6)                  Kurz - počet jednotek. U dokladů v lokální(domácí) 
+                                                               měně = 1.0000                                     
+BankAccount/BankAccount        string (18)                     Číslo účtu ve formátu 6+10. Vyplňuje se pouze pro 
+                                                               CZ nebo SK                                        
+BankAccount/BankCode           string (12)                     Numerický kód banky. Vyplňuje se pouze pro CZ nebo 
+                                                               SK                                                
+BankAccount/IBAN               string (34)                     Mezinárodní číslo bankovního účtu (bez mezer)     
+BankAccount/CurrencyCode       string (3)                      Měna účtu                                         
+OldDocumentNumber              string (10)                     Číslo dokladu, ve kterém byla úhrada. (Pouze pro Vizuální 
+                                                               účetní systém, pro MRP-K/S nepoužívat)            
+
+====================================================================================================
+Splátkový kalendář - předpis úhrad. Cesta (XPath uzel): IssuedInvoices/Invoice/PaymentSchedule/PaymentScheduleItem
+Nepovinný uzel
+====================================================================================================
+PaymentMeansCode               string (10)                     Forma úhrady                                      
+BankAccount                    string (18)                     Číslo účtu ve formátu 6+10. Vyplňuje se pouze pro 
+                                                               CZ nebo SK                                        
+BankCode                       string (12)                     Numerický kód banky. Vyplňuje se pouze pro CZ nebo 
+                                                               SK                                                
+IBAN                           string (34)                     Mezinárodní číslo bankovního účtu (bez mezer)     
+VariableSymbol                 string (10)                     Variabilní symbol                                 
+ConstantSymbol                 string (8)                      Konst.symbol                                      
+SpecificSymbol                 string (10)                     Specif.symb.                                      
+PaymentDueDate                 date                            Datum                                             
+AmountCurr                     decimal (15,2)                  Částka v měně dokl.                               
+
+====================================================================================================
+Dodací adresa. Cesta (XPath uzel): IssuedInvoices/Invoice
+Nepovinný uzel
+====================================================================================================
+DeliveryAddress/CompanyId      string (12)                     IČO                                               
+DeliveryAddress/AddressId      string (50)                     ID adresy - jednoznačný identifikátor adresy. Pro 
+                                                               výměnu dat s externím systémem (např. eshop)      
+DeliveryAddress/Name           string (50)                     Firma                                             
+DeliveryAddress/Name2          string (50)                     Firma 2                                           
+DeliveryAddress/CustomerName   string (30)                     Jméno                                             
+DeliveryAddress/Street         string (30)                     Ulice                                             
+DeliveryAddress/City           string (30)                     Město                                             
+DeliveryAddress/Country        string (30)                     Stát                                              
+DeliveryAddress/CountryCode    string (2)                      Kód státu dle číselníku států. Např. CZ - Česká republika, 
+                                                               SK - Slovensko                                    
+DeliveryAddress/ShortNote      string (30)                     Jiné - krátká poznámka k adrese                   
+DeliveryAddress/ZipCode        string (15)                     PSČ                                               
+DeliveryAddress/VatNumber      string (17)                     CZ verze: DIČ dle CZ legislativy (VAT identification 
+                                                               number), formát čísla např. CZ99999999, SK9999999999, 
+                                                               DE999999999. Viz: http://ec.europa.eu/taxation_customs/vies/faq.html?locale=en#item_11. 
+                                                               SK verze: DIČ dle SK legislativy, např. 1999999999, 
+                                                               2999999999                                        
+DeliveryAddress/VatNumberSK    string (14)                     CZ verze: nepoužívá se. SK verze: IČ DPH (VAT identification 
+                                                               number). Formát čísla např. CZ99999999, SK9999999999, 
+                                                               DE999999999. Viz: http://ec.europa.eu/taxation_customs/vies/faq.html?locale=en#item_11
+DeliveryAddress/Phone          string (30)                     Telefon                                           
+DeliveryAddress/Phone2         string (30)                     Telefon 2                                         
+DeliveryAddress/Phone3         string (30)                     Telefon 3                                         
+DeliveryAddress/Fax            string (30)                     Fax                                               
+DeliveryAddress/Email          string (256)                    Email                                             
+DeliveryAddress/Note           string (32768)                  Poznámka                                          
+DeliveryAddress/NaturalPerson  boolean                         Příznak typu firmy - "T" - fyzická osoba, "F" - právnická 
+                                                               osoba                                             
+DeliveryAddress/AddressFormationDate date                            Datum zařazení/zaevidování/vzniku záznamu         
+DeliveryAddress/UserField1     string (40)                     Uživ.pole 1                                       
+DeliveryAddress/UserField2     string (40)                     Uživ.pole 2                                       
+DeliveryAddress/UserField3     string (40)                     Uživ.pole 3                                       
+DeliveryAddress/UserField4     string (40)                     Uživ.pole 4                                       
+DeliveryAddress/UserField5     string (40)                     Uživ.pole 5                                       
+
+
+====================================================================================================
+Přílohy - dokumenty. Cesta (XPath uzel): IssuedInvoices/Invoice/Attachments/Attachment
+Nepovinný uzel
+====================================================================================================
+FileName                       string (50)                     Jméno souboru přílohy - např. FV0001.PDF apod.    
+FileContent                    blob                            Binární obsah souboru přílohy                     
+Description                    string (100)                    Poznámka                                          
