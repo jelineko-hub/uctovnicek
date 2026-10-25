@@ -1,5 +1,8 @@
 # Changelog
 
+## Téma v0.008 — Odhlásenie
+- V hlavičke (Moje firmy aj detail firmy) e-mail prihláseného účtu a tlačidlo „Odhlásiť" (server action `signOut` → /login).
+
 ## Téma v0.007 — E3: export do MRP-K/S
 - Záložka **Export**: výber prijaté / vydané faktúry a mesiac (podľa DUZP, inak dátumu vystavenia), náhľad schválených
   dokladov s kontrolou (chyby blokujú: chýba partner, položky, dátum, prefix radu, limity MRP; upozornenia: nesedí

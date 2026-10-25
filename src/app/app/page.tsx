@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { AccountBar } from '@/components/AccountBar';
 import { createClient } from '@/lib/supabase-server';
 import { APP_VERSION } from '@/lib/version';
 import { createCompany } from './actions';
@@ -12,7 +13,10 @@ export default async function AppHome() {
 
   return (
     <main className="wrap">
-      <h1>Moje firmy</h1>
+      <div className="company-header">
+        <h1 style={{ margin: 0 }}>Moje firmy</h1>
+        <AccountBar />
+      </div>
       <div className="card" style={{ marginBottom: 16 }}>
         {companies?.length ? (
           <ul style={{ margin: 0, paddingLeft: 18 }}>

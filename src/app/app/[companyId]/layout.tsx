@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { AccountBar } from '@/components/AccountBar';
 import { KIND_SECTIONS, type Kind } from '@/lib/documentKinds';
 import { createClient } from '@/lib/supabase-server';
 import { APP_VERSION } from '@/lib/version';
@@ -31,6 +32,7 @@ export default async function CompanyLayout({
           <h1 style={{ margin: '4px 0 0' }}>{company.name}</h1>
           {company.ico && <span className="muted small">IČO {company.ico}</span>}
         </div>
+        <AccountBar />
       </header>
       <nav className="tabs">
         <Link href={base}>Nespracované</Link>

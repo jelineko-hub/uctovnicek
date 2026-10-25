@@ -109,3 +109,5 @@ fieldset:disabled input, fieldset:disabled select, fieldset:disabled textarea { 
 .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
 .row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 4px; }
 .row-actions button.link { color: var(--accent); text-decoration: underline; }
+.account-bar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.account-bar button.link { text-decoration: underline; }
