@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { DOCUMENTS_BUCKET } from '@/lib/db';
 import { refreshDuplicateOf } from '@/lib/duplicates';
+import { applyEkasa } from '@/lib/ekasa/service';
+import { normalizeEkasaUid } from '@/lib/ekasa/uid';
 import { ExtractionError, extractDocument } from '@/lib/extraction/extract';
 import { toDocument } from '@/lib/extraction/toDocument';
 import { createClient } from '@/lib/supabase-server';
@@ -31,8 +33,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Vyťažiť sa dá len nespracovaný doklad.' }, { status: 409 });
   }
 
-  const [{ data: company }, { data: file }] = await Promise.all([
-    supabase.from('companies').select('name, ico').eq('id', doc.company_id).single(),
+  const [{ data: company }, { data: file }, { data: accounts }] = await Promise.all([
+    supabase.from('companies').select('name, ico, iban').eq('id', doc.company_id).single(),
     supabase
       .from('document_files')
       .select('storage_path, mime, size_bytes')
@@ -40,6 +42,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       .order('created_at')
       .limit(1)
       .maybeSingle(),
+    supabase.from('bank_accounts').select('iban').eq('company_id', doc.company_id),
   ]);
   if (!company || !file) return NextResponse.json({ error: 'Doklad nemá súbor.' }, { status: 400 });
   if (Number(file.size_bytes) > MAX_BYTES) {
@@ -61,7 +64,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
-  const { patch, lines } = toDocument(result.data, company.ico);
+  const { patch, lines } = toDocument(result.data, company.ico, [company.iban, ...(accounts ?? []).map((a) => a.iban)]);
   const { error: upError } = await supabase
     .from('documents')
     .update({ ...patch, ocr_raw: { ...result.data, model: result.model } })
@@ -80,7 +83,19 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     company_id: doc.company_id,
     diff: { action: 'extracted', model: result.model },
   });
+  // Model prečítal UID bločku → presné údaje z eKasa majú prednosť (pri chybe ostáva vyťaženie).
+  let ekasa: { ok: boolean; error?: string } | null = null;
+  if (patch.kind === 'receipt' && normalizeEkasaUid(patch.ekasa_uid)) {
+    const res = await applyEkasa(supabase, id, patch.ekasa_uid);
+    ekasa = res.ok ? { ok: true } : { ok: false, error: res.error };
+  }
   const duplicateOf = await refreshDuplicateOf(supabase, id);
 
-  return NextResponse.json({ ok: true, kind: patch.kind, notes: result.data.notes, duplicate_of: duplicateOf });
+  return NextResponse.json({
+    ok: true,
+    kind: patch.kind,
+    notes: ekasa?.ok ? 'Údaje doplnené z eKasa.' : result.data.notes,
+    ekasa,
+    duplicate_of: duplicateOf,
+  });
 }

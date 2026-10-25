@@ -12,7 +12,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ compa
     supabase
       .from('documents')
       .select(
-        'id, company_id, kind, subtype, status, partner_snapshot, original_number, variable_symbol, constant_symbol, ekasa_uid, issue_date, tax_point_date, due_date, currency, total_amount, payment_method, vat_mode, note, internal_note, ocr_raw, ocr_confidence, source, duplicate_of, duplicate_ignored',
+        'id, company_id, kind, subtype, status, partner_snapshot, original_number, variable_symbol, constant_symbol, ekasa_uid, issue_date, tax_point_date, due_date, currency, total_amount, payment_method, vat_mode, note, internal_note, ocr_raw, ocr_confidence, source, duplicate_of, duplicate_ignored, prices_with_vat',
       )
       .eq('id', docId)
       .eq('company_id', companyId)
@@ -37,13 +37,18 @@ export default async function DocumentPage({ params }: { params: Promise<{ compa
     ? (await supabase.storage.from(DOCUMENTS_BUCKET).createSignedUrl(file.storage_path, 3600)).data?.signedUrl
     : null;
 
-  const raw = (doc.ocr_raw ?? null) as { vat_summary?: { rate: number; base: number; vat: number }[]; notes?: string | null } | null;
+  const raw = (doc.ocr_raw ?? null) as {
+    vat_summary?: { rate: number; base: number; vat: number }[];
+    notes?: string | null;
+    source?: string;
+  } | null;
   const editorDoc: EditorDocument = {
     ...doc,
     total_amount: doc.total_amount == null ? null : Number(doc.total_amount),
     ocr_confidence: doc.ocr_confidence == null ? null : Number(doc.ocr_confidence),
     printed_vat: raw?.vat_summary ?? [],
     ocr_notes: raw?.notes ?? null,
+    from_ekasa: raw?.source === 'ekasa',
     lines: (lines ?? []).map((l) => ({
       name: l.name,
       quantity: Number(l.quantity),

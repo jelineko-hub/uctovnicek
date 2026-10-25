@@ -6,6 +6,8 @@ import { useRef, useState } from 'react';
 import { compressImage, safeFileName } from '@/lib/compressImage';
 import { DOCUMENTS_BUCKET } from '@/lib/db';
 import { sha256Hex } from '@/lib/duplicates';
+import { uidFromQr } from '@/lib/ekasa/uid';
+import { readQrFromImage } from '@/lib/qrImage';
 import { createClient } from '@/lib/supabase-browser';
 
 type ItemState = 'uploading' | 'extracting' | 'done' | 'error' | 'duplicate';
@@ -59,6 +61,8 @@ export function UploadDocuments({ companyId }: { companyId: string }) {
         }
       }
 
+      // QR kód eKasa čítame z pôvodnej fotky (pred zmenšením je čitateľnejší).
+      const ekasaUid = uidFromQr(await readQrFromImage(original));
       const file = await compressImage(original);
       if (file.size > MAX_BYTES) throw new Error('Súbor je väčší ako 20 MB.');
       if (!ACCEPT.split(',').includes(file.type)) throw new Error('Podporované sú PDF, JPG, PNG a WebP.');
@@ -74,6 +78,7 @@ export function UploadDocuments({ companyId }: { companyId: string }) {
           kind: 'other',
           status: 'unprocessed',
           source,
+          ekasa_uid: ekasaUid,
           ...(forcedDuplicateOf ? { duplicate_of: forcedDuplicateOf, duplicate_ignored: true } : {}),
         });
       if (docError) throw new Error(docError.message);
@@ -96,6 +101,22 @@ export function UploadDocuments({ companyId }: { companyId: string }) {
       if (fileError) throw new Error(fileError.message);
 
       update(key, { state: 'extracting' });
+      let ekasaNote: string | undefined;
+      if (ekasaUid) {
+        // Bloček s QR → presné údaje z eKasa bez vyťaženia modelom; pri chybe pokračuje bežné vyťaženie.
+        const ek = await fetch(`/api/documents/${docId}/ekasa`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: ekasaUid }),
+        });
+        const ekBody = await ek.json().catch(() => ({}));
+        if (ek.ok) {
+          update(key, { state: 'done', message: ['Údaje z eKasa.', ...(ekBody.warnings ?? [])].join(' ') });
+          return;
+        }
+        ekasaNote = `eKasa: ${ekBody.error?.message ?? ek.statusText} Čítam z fotky.`;
+        update(key, { message: ekasaNote });
+      }
       const res = await fetch(`/api/documents/${docId}/extract`, { method: 'POST' });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -103,7 +124,7 @@ export function UploadDocuments({ companyId }: { companyId: string }) {
       } else if (body.duplicate_of && !forcedDuplicateOf) {
         update(key, { state: 'done', duplicateOf: body.duplicate_of, message: 'Možný duplikát — rovnaké číslo, suma a dátum ako iný doklad.' });
       } else {
-        update(key, { state: 'done', message: body.notes ?? undefined });
+        update(key, { state: 'done', message: [ekasaNote, body.notes].filter(Boolean).join(' ') || undefined });
       }
     } catch (e) {
       update(key, { state: 'error', message: e instanceof Error ? e.message : String(e) });

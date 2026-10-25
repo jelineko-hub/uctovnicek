@@ -54,4 +54,17 @@ describe('toDocument', () => {
     const { lines } = toDocument(base, null);
     expect(lines).toEqual([{ position: 0, name: 'Materiál', quantity: 1, unit: 'ks', unit_price: 100, vat_rate: 23 }]);
   });
+
+  it('IBAN firmy ako dodávateľský účet → vydaná faktúra (keď IČO nerozhodne)', () => {
+    const noIco = { ...base, customer: { ...base.customer, ico: null }, supplier: { ...base.supplier, ico: null } };
+    expect(toDocument(noIco, '87654321', ['SK31 1200 0000 1987 4263 7541']).patch.kind).toBe('issued_invoice');
+    expect(toDocument(noIco, '87654321', ['SK0000000000000000000000']).patch.kind).toBe('received_invoice');
+    // IČO má prednosť pred IBAN-om
+    expect(toDocument(base, '87654321', ['SK3112000000198742637541']).patch.kind).toBe('received_invoice');
+  });
+
+  it('bloček sa počíta zo súm s DPH', () => {
+    expect(toDocument({ ...base, kind: 'receipt' }, null).patch.prices_with_vat).toBe(true);
+    expect(toDocument(base, null).patch.prices_with_vat).toBe(false);
+  });
 });

@@ -62,7 +62,7 @@ async function context(docId: string) {
   if (!user) throw new Error('Neprihlásený používateľ.');
   const { data: doc } = await supabase
     .from('documents')
-    .select('id, company_id, status, partner_id')
+    .select('id, company_id, status, partner_id, prices_with_vat')
     .eq('id', docId)
     .maybeSingle();
   if (!doc) throw new Error('Doklad neexistuje alebo k nemu nemáš prístup.');
@@ -133,7 +133,10 @@ async function save(docId: string, input: DocumentInput, confirm: boolean): Prom
       if (problems.length) return { ok: false, error: `Na potvrdenie chýba: ${problems.join(', ')}.` };
     }
 
-    const computed = totals(d.lines.map((l) => ({ quantity: l.quantity, unitPrice: l.unit_price, vatRate: l.vat_rate })));
+    const computed = totals(
+      d.lines.map((l) => ({ quantity: l.quantity, unitPrice: l.unit_price, vatRate: l.vat_rate })),
+      { pricesWithVat: doc.prices_with_vat },
+    );
     const partnerId = confirm ? await upsertPartner(supabase, doc.company_id, d.partner) : doc.partner_id;
 
     const { error } = await supabase

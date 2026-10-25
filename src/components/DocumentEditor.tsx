@@ -53,6 +53,8 @@ export interface EditorDocument {
   ocr_confidence: number | null;
   source: string;
   ocr_notes: string | null;
+  from_ekasa: boolean;
+  prices_with_vat: boolean;
   printed_vat: { rate: number; base: number; vat: number }[];
   lines: { name: string; quantity: number; unit: string | null; unit_price: number; vat_rate: number }[];
 }
@@ -138,8 +140,12 @@ export function DocumentEditor({
   );
 
   const computed = useMemo(
-    () => totals(lines.map((l) => ({ quantity: num(l.quantity), unitPrice: num(l.unit_price), vatRate: num(l.vat_rate) }))),
-    [lines],
+    () =>
+      totals(
+        lines.map((l) => ({ quantity: num(l.quantity), unitPrice: num(l.unit_price), vatRate: num(l.vat_rate) })),
+        { pricesWithVat: doc.prices_with_vat },
+      ),
+    [lines, doc.prices_with_vat],
   );
 
   const warnings = useMemo(() => {
@@ -200,6 +206,21 @@ export function DocumentEditor({
     });
   }
 
+  const [ekasaUid, setEkasaUid] = useState(doc.ekasa_uid ?? '');
+  function loadEkasa() {
+    setMessage(null);
+    startTransition(async () => {
+      const res = await fetch(`/api/documents/${doc.id}/ekasa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: ekasaUid }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) setMessage({ type: 'error', text: body.error?.message ?? res.statusText });
+      else window.location.reload();
+    });
+  }
+
   async function reextract() {
     setMessage(null);
     startTransition(async () => {
@@ -238,7 +259,9 @@ export function DocumentEditor({
           <span className={`badge ${doc.status}`}>{isKey(STATUSES, doc.status) ? STATUSES[doc.status] : doc.status}</span>
           <span className="muted small">
             {isKey(SOURCES, doc.source) ? SOURCES[doc.source] : doc.source}
-            {doc.ocr_confidence != null && ` · istota vyťaženia ${Math.round(doc.ocr_confidence * 100)} %`}
+            {doc.from_ekasa
+              ? ' · údaje z eKasa (Finančná správa)'
+              : doc.ocr_confidence != null && ` · istota vyťaženia ${Math.round(doc.ocr_confidence * 100)} %`}
           </span>
         </div>
         {blockedReason && <p className="note">{blockedReason}</p>}
@@ -304,7 +327,18 @@ export function DocumentEditor({
           </label>
           <label>Mena<input value={head.currency} maxLength={3} onChange={(e) => setHead({ ...head, currency: e.target.value })} /></label>
           <label>Celkom s DPH<input inputMode="decimal" value={head.total_amount} onChange={(e) => setHead({ ...head, total_amount: e.target.value })} /></label>
-          {doc.ekasa_uid && <p className="muted small" style={{ gridColumn: '1 / -1', margin: 0 }}>eKasa UID: {doc.ekasa_uid}</p>}
+          {editable && doc.status === 'unprocessed' && (kind === 'receipt' || kind === 'other') ? (
+            <div style={{ gridColumn: '1 / -1' }} className="ekasa-row">
+              <label style={{ flex: 1 }}>UID bločku (eKasa)
+                <input value={ekasaUid} placeholder="O-…" onChange={(e) => setEkasaUid(e.target.value)} />
+              </label>
+              <button type="button" className="secondary" disabled={pending || !ekasaUid.trim()} onClick={loadEkasa}>
+                Načítať z eKasa
+              </button>
+            </div>
+          ) : (
+            doc.ekasa_uid && <p className="muted small" style={{ gridColumn: '1 / -1', margin: 0 }}>eKasa UID: {doc.ekasa_uid}</p>
+          )}
         </fieldset>
 
         <h3>{kind === 'issued_invoice' ? 'Odberateľ' : 'Dodávateľ'}</h3>

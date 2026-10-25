@@ -1,0 +1,93 @@
+{
+  "returnValue": 0,
+  "receipt": {
+    "receiptId": "O-9B1B3545701B46F39B3545701BE6F3A6",
+    "ico": "31425933",
+    "cashRegisterCode": "88820204195000006",
+    "issueDate": "05.09.2026 08:32:29",
+    "createDate": "05.09.2026 08:32:29",
+    "customerId": null,
+    "dic": "2020419500",
+    "icDph": "SK2020419500",
+    "invoiceNumber": null,
+    "okp": "c555c49d-b88823a2-19f49b8e-4f7601d4-0f94267a",
+    "paragon": false,
+    "paragonNumber": null,
+    "pkp": "(skrátené)",
+    "receiptNumber": 217,
+    "type": "PD",
+    "taxBaseBasic": null,
+    "taxBaseReduced": null,
+    "totalPrice": 12.75,
+    "freeTaxAmount": null,
+    "vatAmountBasic": null,
+    "vatAmountReduced": null,
+    "vatRateBasic": null,
+    "vatRateReduced": null,
+    "items": [
+      {
+        "name": "PA SPOJKA 25",
+        "itemType": "K",
+        "quantity": 1.0,
+        "vatRate": 23.0,
+        "price": 2.55,
+        "sellerId": null,
+        "sellerIdType": null,
+        "specialRegulation": null,
+        "voucherNumber": null
+      },
+      {
+        "name": "CITYSTONE Obrubník 100x25x5 45ks|pal",
+        "itemType": "K",
+        "quantity": 3.0,
+        "vatRate": 23.0,
+        "price": 10.2,
+        "sellerId": null,
+        "sellerIdType": null,
+        "specialRegulation": null,
+        "voucherNumber": null
+      }
+    ],
+    "organization": {
+      "buildingNumber": null,
+      "country": "Slovensko",
+      "dic": "2020419500",
+      "icDph": "SK2020419500",
+      "ico": "31425933",
+      "municipality": "Topoľčany",
+      "name": "STAVEBNINY ASAS spol. s r.o.",
+      "postalCode": "95501",
+      "propertyRegistrationNumber": ".",
+      "streetName": "Pod kalváriou",
+      "vatPayer": true,
+      "manualVatPayer": null
+    },
+    "unit": {
+      "cashRegisterCode": "88820204195000006",
+      "buildingNumber": null,
+      "country": "Slovensko",
+      "municipality": "Topoľčany",
+      "postalCode": "95501",
+      "propertyRegistrationNumber": "30",
+      "streetName": "Pod kalváriou",
+      "name": null,
+      "unitType": "STANDARD"
+    },
+    "exemption": false,
+    "vatSummary": [
+      {
+        "vatBase": 10.37,
+        "vatAmount": 2.38,
+        "vat": {
+          "vatRate": 23.0
+        }
+      }
+    ]
+  },
+  "searchIdentification": {
+    "createDate": 1792960062282,
+    "bucket": 0,
+    "internalReceiptId": "O-9B1B3545701B46F39B3545701BE6F3A6",
+    "searchUuid": "00000000-0000-0000-0000-000000000000"
+  }
+}

@@ -22,20 +22,34 @@ export function lineNet(l: VatLine): number {
   return l.unitPrice * (1 - (l.discountPercent ?? 0) / 100) * l.quantity;
 }
 
+export interface VatOptions {
+  /**
+   * Doklad počítaný zo súm S DPH (bločky, maloobchod): za sadzbu sa zaokrúhli suma s DPH,
+   * základ = suma / (1 + sadzba), DPH = suma − základ. Inak sa zaokrúhli základ a DPH = základ × sadzba.
+   * (`documents.prices_with_vat`; ceny položiek sa aj tak ukladajú bez DPH.)
+   */
+  pricesWithVat?: boolean;
+}
+
 /** Rozpis DPH podľa sadzieb, zoradený od najvyššej. */
-export function vatSummary(lines: VatLine[]): VatRow[] {
+export function vatSummary(lines: VatLine[], opts: VatOptions = {}): VatRow[] {
   const by = new Map<number, number>();
   for (const l of lines) by.set(l.vatRate, (by.get(l.vatRate) ?? 0) + lineNet(l));
   return [...by.entries()]
     .sort((a, b) => b[0] - a[0])
-    .map(([rate, base]) => {
-      const b = round2(base);
+    .map(([rate, net]) => {
+      if (opts.pricesWithVat) {
+        const gross = round2(net * (1 + rate / 100));
+        const base = round2(gross / (1 + rate / 100));
+        return { rate, base, vat: round2(gross - base) };
+      }
+      const b = round2(net);
       return { rate, base: b, vat: round2((b * rate) / 100) };
     });
 }
 
-export function totals(lines: VatLine[]) {
-  const rows = vatSummary(lines);
+export function totals(lines: VatLine[], opts: VatOptions = {}) {
+  const rows = vatSummary(lines, opts);
   const base = round2(rows.reduce((a, r) => a + r.base, 0));
   const vat = round2(rows.reduce((a, r) => a + r.vat, 0));
   return { rows, base, vat, total: round2(base + vat) };

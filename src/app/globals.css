@@ -111,3 +111,4 @@ fieldset:disabled input, fieldset:disabled select, fieldset:disabled textarea { 
 .row-actions button.link { color: var(--accent); text-decoration: underline; }
 .account-bar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 .account-bar button.link { text-decoration: underline; }
+.ekasa-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }

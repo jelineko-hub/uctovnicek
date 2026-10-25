@@ -23,4 +23,13 @@ describe('vat', () => {
   it('prepočíta cenu s DPH na bez DPH', () => {
     expect(netFromGross(123, 23)).toBeCloseTo(100, 10);
   });
+
+  it('bloček: DPH zo sumy s DPH (12,75 € pri 23 % → základ 10,37, DPH 2,38)', () => {
+    const lines = [
+      { quantity: 1, unitPrice: 2.55 / 1.23, vatRate: 23 },
+      { quantity: 3, unitPrice: 3.4 / 1.23, vatRate: 23 },
+    ];
+    expect(totals(lines, { pricesWithVat: true })).toMatchObject({ base: 10.37, vat: 2.38, total: 12.75 });
+    expect(totals(lines).total).toBe(12.76); // zo základu by vyšlo o cent viac
+  });
 });

@@ -53,3 +53,5 @@ Funkčný vzor: Doklado (analýza v `docs/analyza-doklado.md`) — preberáme fu
 - Duplicity: `lib/duplicates.ts` (`refreshDuplicateOf` po každej zmene čísla/sumy/dátumu/partnera); hash súboru pri každom novom zdroji.
 - API route handlers: autentifikácia a chyby cez `lib/apiAuth.ts` (`apiClient`, `apiError`, `statusFor`); logika v `lib/<modul>/service.ts`,
   ktorú volajú aj server actions. Export do MRP len cez `lib/export/` (Účtovníček nečísluje — prefix radu + UUID, číslo pridelí MRP).
+- eKasa len cez `lib/ekasa/` (neoficiálne API FS — vždy fallback na vyťaženie); bločky majú `prices_with_vat = true`
+  → DPH vždy `totals(lines, { pricesWithVat })` podľa dokladu, inak vyjde o cent iná DPH než na bločku.

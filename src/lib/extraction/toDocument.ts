@@ -47,7 +47,8 @@ export interface DocumentPatch {
   total_amount: number | null;
   payment_method: ExtractedDocument['payment_method'];
   vat_mode: ExtractedDocument['vat_mode'];
-  prices_with_vat: false;
+  /** Bločky sa počítajú zo súm s DPH (lib/vat.ts `pricesWithVat`). */
+  prices_with_vat: boolean;
   ocr_confidence: number;
 }
 
@@ -74,16 +75,22 @@ function party(p: ExtractedDocument['supplier']): PartnerSnapshot {
   };
 }
 
-export function toDocument(x: ExtractedDocument, companyIco: string | null) {
+/**
+ * @param companyIbans IBAN-y firmy (firma + bankové účty) — ďalší signál pre prijatú vs. vydanú faktúru.
+ */
+export function toDocument(x: ExtractedDocument, companyIco: string | null, companyIbans: (string | null)[] = []) {
   const own = digits(companyIco);
+  const ownIbans = new Set(companyIbans.filter((i): i is string => !!i).map(normalizeIban));
   const supplier = party(x.supplier);
   const customer = party(x.customer);
 
   // IČO firmy je spoľahlivejšie než úsudok modelu: ak sedí na dodávateľa, je to vydaná faktúra.
+  // Bez zhody IČO rozhodne IBAN: na faktúre je účet príjemcu platby, teda dodávateľa.
   let kind = x.kind;
-  if (own && kind !== 'receipt' && kind !== 'cash') {
-    if (supplier.ico === own) kind = 'issued_invoice';
-    else if (customer.ico === own) kind = 'received_invoice';
+  if (kind !== 'receipt' && kind !== 'cash') {
+    if (own && supplier.ico === own) kind = 'issued_invoice';
+    else if (own && customer.ico === own) kind = 'received_invoice';
+    else if (supplier.iban && ownIbans.has(supplier.iban)) kind = 'issued_invoice';
   }
   const partner = kind === 'issued_invoice' ? customer : supplier;
 
@@ -102,7 +109,7 @@ export function toDocument(x: ExtractedDocument, companyIco: string | null) {
     total_amount: x.total_amount == null ? null : round2(x.total_amount),
     payment_method: x.payment_method,
     vat_mode: x.vat_mode,
-    prices_with_vat: false,
+    prices_with_vat: kind === 'receipt',
     ocr_confidence: Math.max(0, Math.min(1, Number(x.confidence) || 0)),
   };
 

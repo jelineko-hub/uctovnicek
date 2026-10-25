@@ -1,5 +1,19 @@
 # Changelog
 
+## Téma v0.010 — E4: bločky z eKasa, DPH bločkov, IBAN signál
+- **eKasa:** `lib/ekasa/` — UID (`O-` + 32 hex) z QR alebo textu, lookup „Over doklad" Finančnej správy
+  (`opd/receipt/find`, neoficiálne rozhranie: timeout 5 s, chyby do logu, fallback na vyťaženie), prevod na doklad
+  (predajca → partner, cena riadku s DPH → jednotková cena bez DPH, rekapitulácia DPH z eKasa, platba „V hotovosti").
+  Test na reálnom bločku (`test-fixtures/ekasa/receipt-pd.json`). Synchrónne; do `jobs` v E7.
+- Nahrávanie fotky: QR kód sa prečíta v prehliadači (`BarcodeDetector`, inak `jsqr`) → doklad sa doplní z eKasa
+  bez volania modelu. Ak QR nejde prečítať a model vyčíta UID z textu, eKasa sa zavolá po vyťažení a má prednosť.
+  Editor nespracovaného bločku: pole UID + „Načítať z eKasa". API `POST /api/documents/:id/ekasa` ({uid?}).
+- **DPH bločkov zo súm s DPH:** `lib/vat.ts` `pricesWithVat` (zaokrúhli sa suma s DPH za sadzbu, DPH = suma − základ;
+  12,75 € pri 23 % → 10,37 + 2,38, nie 2,39). Zapnuté pre bločky (eKasa aj vyťaženie) cez `documents.prices_with_vat`;
+  editor a uloženie dokladu ho rešpektujú.
+- **P0.5 IBAN:** ak IČO nerozhodne, IBAN dodávateľa = IBAN firmy alebo jej bankového účtu → vydaná faktúra.
+- Migrácia `20261025140000_e4_ekasa.sql` (aplikovaná): `documents.ekasa_data`, index na `ekasa_uid`.
+
 ## Téma v0.009 — Export: dlhé merné jednotky
 - MRP `UnitCode` má max. 3 znaky: bežné jednotky sa pri exporte skrátia (komplet → kpl, hodina → hod, balenie → bal,
   meter → m…), neznáma dlhá jednotka sa vynechá. Namiesto chyby, ktorá blokovala export, je to upozornenie v náhľade.
