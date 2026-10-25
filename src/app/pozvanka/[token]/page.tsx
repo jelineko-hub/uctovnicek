@@ -14,7 +14,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
     return (
       <main className="wrap" style={{ maxWidth: 520 }}>
         <h1>Pozvánka do Účtovníčka</h1>
-        <p>Na prijatie pozvánky sa prihlás e-mailom, na ktorý prišla.</p>
+        <p>Na prijatie pozvánky sa prihlás e-mailom, na ktorý prišla (ak ešte nemáš účet, na prihlasovacej stránke si ho vytvoríš).</p>
         <Link href={loginHref} className="button">Prihlásiť sa</Link>
       </main>
     );

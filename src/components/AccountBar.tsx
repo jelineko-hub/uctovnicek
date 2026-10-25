@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { signOut } from '@/app/app/actions';
 import { createClient } from '@/lib/supabase-server';
 
@@ -9,7 +10,7 @@ export async function AccountBar({ next }: { next?: string } = {}) {
   return (
     <form action={signOut} className="account-bar">
       {next && <input type="hidden" name="next" value={next} />}
-      <span className="muted small">{user.email}</span>
+      <Link href="/app/ucet" className="muted small">{user.email}</Link>
       <button type="submit" className="link small">Odhlásiť</button>
     </form>
   );

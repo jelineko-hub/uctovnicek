@@ -1,5 +1,11 @@
 # Changelog
 
+## Téma v0.013 — prihlásenie heslom
+- **Prihlásenie** je predvolene e-mail + heslo (`signInWithPassword`); odkaz e-mailom ostáva ako možnosť. Pridané
+  „Vytvoriť účet" (heslo, min. 8 znakov) a „Zabudnuté heslo" (odkaz → Môj účet). Chyby Supabase preložené do slovenčiny.
+- **Môj účet** (`/app/ucet`, klik na e-mail v hlavičke): zmena hesla. Auth je spoločný so zkw plannerom → heslo platí aj tam.
+- Dôvod: vstavaný e-mail Supabase má nízky limit („email rate limit exceeded") a blokoval prihlasovanie odkazom.
+
 ## Téma v0.012 — E6: číselníky, automatické účtovanie, uzávierky
 - **Číselníky** (Nastavenia → Účtovanie): predkontácia (MRP číslo), Typ DPH, stredisko (6), zákazka (15), číselný rad
   (prefix, 10); pridanie, predvolená/aktívna, platnosť pre druh dokladu, import CSV `kód;názov`. Nastavenie exportu
