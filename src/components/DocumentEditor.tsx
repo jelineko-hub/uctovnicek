@@ -8,10 +8,13 @@ import {
   confirmDocument,
   deleteDocument,
   ignoreDuplicate,
+  saveAccountingRuleFromDocument,
   saveDocument,
   type DocumentInput,
 } from '@/app/app/[companyId]/doklady/actions';
 import { KINDS, PAYMENT_METHODS, SOURCES, STATUSES, SUBTYPES, VAT_MODES, VAT_RATES, isKey, type Status } from '@/lib/documentKinds';
+import { CODE_LISTS, CODE_LIST_KEYS, defaultsFor, isEmptyAccounting, itemsFor, type Accounting, type CodeItem } from '@/lib/accounting/codes';
+import { periodLabel } from '@/lib/accounting/periods';
 import { allowedTransitions, canDelete, canEdit, editBlockedReason, type Role } from '@/lib/documentStatus';
 import { date } from '@/lib/format';
 import { money } from '@/lib/format';
@@ -54,6 +57,8 @@ export interface EditorDocument {
   source: string;
   ocr_notes: string | null;
   from_ekasa: boolean;
+  evidence_date: string | null;
+  accounting: Accounting;
   prices_with_vat: boolean;
   printed_vat: { rate: number; base: number; vat: number }[];
   lines: { name: string; quantity: number; unit: string | null; unit_price: number; vat_rate: number }[];
@@ -97,17 +102,26 @@ const str = (n: number | null | undefined) => (n == null ? '' : String(n));
 export function DocumentEditor({
   doc,
   role,
+  codeItems,
+  suggestion,
+  closedPeriod,
   duplicateOf,
   file,
 }: {
   doc: EditorDocument;
   role: Role | null;
+  /** Číselníky firmy (len pre účtovníka/schvaľovateľa). */
+  codeItems: CodeItem[];
+  /** Návrh účtovných údajov z histórie partnera (keď doklad žiadne nemá). */
+  suggestion: Accounting;
+  /** Obdobie dokladu je uzavreté (napr. '9/2026') → len na čítanie. */
+  closedPeriod: string | null;
   duplicateOf: DuplicateInfo | null;
   file: { url: string; mime: string } | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string; evidenceDate?: string } | null>(null);
 
   const [kind, setKind] = useState(doc.kind);
   const [subtype, setSubtype] = useState(doc.subtype);
@@ -128,7 +142,12 @@ export function DocumentEditor({
     vat_mode: doc.vat_mode,
     note: doc.note ?? '',
     internal_note: doc.internal_note ?? '',
+    evidence_date: doc.evidence_date ?? '',
   });
+  const suggested = isEmptyAccounting(doc.accounting) && !isEmptyAccounting(suggestion);
+  const [accounting, setAccounting] = useState<Accounting>(suggested ? suggestion : doc.accounting);
+  const showAccounting = role === 'accountant' || role === 'approver';
+  const defaults = useMemo(() => defaultsFor(codeItems, kind), [codeItems, kind]);
   const [lines, setLines] = useState<LineDraft[]>(
     doc.lines.map((l) => ({
       name: l.name,
@@ -181,6 +200,8 @@ export function DocumentEditor({
       vat_mode: head.vat_mode as DocumentInput['vat_mode'],
       note: head.note,
       internal_note: head.internal_note,
+      evidence_date: head.evidence_date,
+      ...(role === 'accountant' ? { accounting: Object.fromEntries(Object.entries(accounting).filter(([, v]) => v)) as Record<string, string> } : {}),
       lines: lines
         .filter((l) => l.name.trim())
         .map((l) => ({
@@ -193,11 +214,11 @@ export function DocumentEditor({
     };
   }
 
-  function run(action: () => Promise<{ ok: boolean; error?: string }>, okText: string, after?: () => void) {
+  function run(action: () => Promise<{ ok: boolean; error?: string; evidenceDate?: string }>, okText: string, after?: () => void) {
     setMessage(null);
     startTransition(async () => {
       const res = await action();
-      if (!res.ok) setMessage({ type: 'error', text: res.error ?? 'Chyba' });
+      if (!res.ok) setMessage({ type: 'error', text: res.error ?? 'Chyba', evidenceDate: res.evidenceDate });
       else {
         setMessage({ type: 'ok', text: okText });
         if (after) after();
@@ -233,8 +254,9 @@ export function DocumentEditor({
 
   const setLine = (i: number, patch: Partial<LineDraft>) =>
     setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
-  const editable = canEdit(doc.status, role);
-  const blockedReason = editBlockedReason(doc.status, role);
+  const editable = canEdit(doc.status, role) && !closedPeriod;
+  const blockedReason =
+    editBlockedReason(doc.status, role) ?? (closedPeriod ? `Obdobie ${closedPeriod} je uzavreté — doklad sa nedá meniť.` : null);
   const transitions = allowedTransitions(doc.status, role).filter(
     (t) => t !== 'exported' && !(doc.status === 'unprocessed' && t === 'ready'),
   );
@@ -313,6 +335,9 @@ export function DocumentEditor({
           <label>Dátum vystavenia<input type="date" value={head.issue_date} onChange={(e) => setHead({ ...head, issue_date: e.target.value })} /></label>
           <label>Dátum dodania (DUZP)<input type="date" value={head.tax_point_date} onChange={(e) => setHead({ ...head, tax_point_date: e.target.value })} /></label>
           <label>Splatnosť<input type="date" value={head.due_date} onChange={(e) => setHead({ ...head, due_date: e.target.value })} /></label>
+          <label title="Ak doklad prišiel po uzávierke jeho mesiaca, zaeviduje sa do otvoreného obdobia">Dátum evidencie (nepovinné)
+            <input type="date" value={head.evidence_date} onChange={(e) => setHead({ ...head, evidence_date: e.target.value })} />
+          </label>
           <label>Konštantný symbol<input value={head.constant_symbol} onChange={(e) => setHead({ ...head, constant_symbol: e.target.value })} /></label>
           <label>Spôsob úhrady
             <select value={head.payment_method} onChange={(e) => setHead({ ...head, payment_method: e.target.value })}>
@@ -399,6 +424,49 @@ export function DocumentEditor({
           </table>
         </fieldset>
 
+        {showAccounting && (
+          <>
+            <h3>Účtovanie</h3>
+            <fieldset className="card grid2" disabled={!editable || role !== 'accountant'}>
+              {suggested && (
+                <p className="note" style={{ gridColumn: '1 / -1', margin: 0 }}>
+                  Návrh podľa posledných dokladov tohto partnera — uloží sa spolu s dokladom.
+                </p>
+              )}
+              {CODE_LIST_KEYS.map((k) => {
+                const options = itemsFor(codeItems, k, kind);
+                const current = accounting[k] ?? '';
+                return (
+                  <label key={k}>{CODE_LISTS[k].label}
+                    <select value={current} onChange={(e) => setAccounting({ ...accounting, [k]: e.target.value || undefined })}>
+                      <option value="">{defaults[k] ? `predvolené (${defaults[k]})` : '—'}</option>
+                      {current && !options.some((o) => o.code === current) && <option value={current}>{current} (nie je v číselníku)</option>}
+                      {options.map((o) => <option key={o.id} value={o.code}>{o.code}{o.name ? ` — ${o.name}` : ''}</option>)}
+                    </select>
+                  </label>
+                );
+              })}
+              {role === 'accountant' && editable && !isEmptyAccounting(accounting) && partner.ico && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={pending}
+                    onClick={() =>
+                      run(
+                        () => saveAccountingRuleFromDocument(doc.id, accounting),
+                        'Pravidlo uložené — ďalšie doklady od tohto partnera dostanú tieto údaje automaticky.',
+                      )
+                    }
+                  >
+                    Uložiť ako pravidlo pre {partner.name || `IČO ${partner.ico}`}
+                  </button>
+                </div>
+              )}
+            </fieldset>
+          </>
+        )}
+
         {warnings.length > 0 && (
           <ul className="warnings">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
         )}
@@ -408,7 +476,24 @@ export function DocumentEditor({
           <label style={{ gridColumn: '1 / -1' }}>Interná poznámka<textarea value={head.internal_note} onChange={(e) => setHead({ ...head, internal_note: e.target.value })} /></label>
         </fieldset>
 
-        {message && <p className={message.type === 'error' ? 'error' : 'success'}>{message.text}</p>}
+        {message && (
+          <p className={message.type === 'error' ? 'error' : 'success'}>
+            {message.text}{' '}
+            {message.evidenceDate && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={pending}
+                onClick={() => {
+                  setHead({ ...head, evidence_date: message.evidenceDate! });
+                  setMessage({ type: 'ok', text: 'Dátum evidencie nastavený — potvrď alebo ulož doklad znova.' });
+                }}
+              >
+                Nastaviť dátum evidencie {periodLabel(message.evidenceDate.slice(0, 7))}
+              </button>
+            )}
+          </p>
+        )}
 
         {(editable || transitions.length > 0) && (
           <div className="actions">

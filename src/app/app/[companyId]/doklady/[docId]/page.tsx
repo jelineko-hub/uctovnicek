@@ -1,6 +1,9 @@
 import { notFound } from 'next/navigation';
 import { DocumentEditor, type EditorDocument } from '@/components/DocumentEditor';
 import { DOCUMENTS_BUCKET } from '@/lib/db';
+import { normalizeAccounting } from '@/lib/accounting/codes';
+import { periodLabel } from '@/lib/accounting/periods';
+import { loadCodeItems, periodCheck, suggestAccounting } from '@/lib/accounting/service';
 import { isRole } from '@/lib/documentStatus';
 import { createClient } from '@/lib/supabase-server';
 
@@ -12,7 +15,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ compa
     supabase
       .from('documents')
       .select(
-        'id, company_id, kind, subtype, status, partner_snapshot, original_number, variable_symbol, constant_symbol, ekasa_uid, issue_date, tax_point_date, due_date, currency, total_amount, payment_method, vat_mode, note, internal_note, ocr_raw, ocr_confidence, source, duplicate_of, duplicate_ignored, prices_with_vat',
+        'id, company_id, kind, subtype, status, partner_snapshot, original_number, variable_symbol, constant_symbol, ekasa_uid, issue_date, tax_point_date, due_date, currency, total_amount, payment_method, vat_mode, note, internal_note, ocr_raw, ocr_confidence, source, duplicate_of, duplicate_ignored, prices_with_vat, evidence_date, accounting',
       )
       .eq('id', docId)
       .eq('company_id', companyId)
@@ -32,6 +35,16 @@ export default async function DocumentPage({ params }: { params: Promise<{ compa
           .maybeSingle()
       : { data: null };
 
+  const role = isRole(member?.role) ? member.role : null;
+  const accounting = normalizeAccounting(doc.accounting);
+  const partnerIco = (doc.partner_snapshot as { ico?: string | null } | null)?.ico ?? null;
+  const showAccounting = role === 'accountant' || role === 'approver';
+  const [codeItems, suggestion, closed] = await Promise.all([
+    showAccounting ? loadCodeItems(supabase, companyId) : Promise.resolve([]),
+    showAccounting && !Object.keys(accounting).length ? suggestAccounting(supabase, companyId, doc.kind, partnerIco, doc.id) : Promise.resolve({}),
+    doc.status !== 'unprocessed' ? periodCheck(supabase, companyId, doc) : Promise.resolve(null),
+  ]);
+
   const file = files?.[0];
   const signed = file
     ? (await supabase.storage.from(DOCUMENTS_BUCKET).createSignedUrl(file.storage_path, 3600)).data?.signedUrl
@@ -49,6 +62,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ compa
     printed_vat: raw?.vat_summary ?? [],
     ocr_notes: raw?.notes ?? null,
     from_ekasa: raw?.source === 'ekasa',
+    accounting,
     lines: (lines ?? []).map((l) => ({
       name: l.name,
       quantity: Number(l.quantity),
@@ -61,7 +75,10 @@ export default async function DocumentPage({ params }: { params: Promise<{ compa
   return (
     <DocumentEditor
       doc={editorDoc}
-      role={isRole(member?.role) ? member.role : null}
+      role={role}
+      codeItems={codeItems}
+      suggestion={suggestion}
+      closedPeriod={closed ? periodLabel(closed.period) : null}
       duplicateOf={original}
       file={signed && file ? { url: signed, mime: file.mime ?? '' } : null}
     />

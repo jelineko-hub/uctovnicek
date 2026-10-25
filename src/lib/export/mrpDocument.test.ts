@@ -18,37 +18,41 @@ const doc: ExportDocument = {
   vat_mode: 'standard',
   note: null,
   partner_snapshot: { name: 'Dodávateľ s.r.o.', ico: '36123456' },
+  accounting: { numeric_series: 'FP' },
   lines: [{ name: 'Materiál', quantity: '1', unit: 'ks', unit_price: '100', vat_rate: '23' }],
 };
-const settings = { prefix_received: 'FP', prefix_issued: 'FV' };
 
 describe('export do MRP', () => {
+  it('účtovné údaje dokladu idú do MRP (predkontácia, stredisko, zákazka, Typ DPH)', () => {
+    const inv = toMrpInvoice({ ...doc, accounting: { numeric_series: 'FP', bookkeeping_code: '12', cost_centre: 'D1', project: 'Z-7', vat_code: '41' } }, true);
+    expect(inv).toMatchObject({ bookkeepingCode: '12', costCentre: 'D1', contractNumber: 'Z-7', taxCode: 41 });
+  });
+
   it('bez interného čísla použije prefix radu podľa druhu a UUID dokladu', () => {
-    const inv = toMrpInvoice(doc, 'received_invoice', settings, true);
+    const inv = toMrpInvoice(doc, true);
     expect(inv.documentNumber).toBeNull();
     expect(inv.documentNumberPrefix).toBe('FP');
     expect(inv.uuid).toBe(doc.id);
     expect(inv.lines[0]).toMatchObject({ quantity: 1, unitPrice: 100, vatRate: 23 });
-    expect(toMrpInvoice({ ...doc, number: 'X1' }, 'received_invoice', settings, true).documentNumberPrefix).toBeNull();
+    expect(toMrpInvoice({ ...doc, number: 'X1' }, true).documentNumberPrefix).toBeNull();
   });
 
   it('platný doklad prejde bez chýb a upozornení', () => {
-    expect(checkDocument(doc, 'received_invoice', settings, true)).toEqual({ errors: [], warnings: [] });
+    expect(checkDocument(doc, 'received_invoice', true)).toEqual({ errors: [], warnings: [] });
   });
 
   it('chyby: bez prefixu, bez položiek, bez partnera, cudzia mena, iný druh', () => {
-    expect(checkDocument(doc, 'received_invoice', {}, true).errors.join()).toMatch(/prefix/);
-    expect(checkDocument({ ...doc, lines: [] }, 'received_invoice', settings, true).errors.join()).toMatch(/položky/);
-    expect(checkDocument({ ...doc, partner_snapshot: null }, 'received_invoice', settings, true).errors.join()).toMatch(/partner/);
-    expect(checkDocument({ ...doc, currency: 'CZK' }, 'received_invoice', settings, true).errors.join()).toMatch(/CZK/);
-    expect(checkDocument(doc, 'issued_invoice', settings, true).errors.join()).toMatch(/druh/);
+    expect(checkDocument({ ...doc, accounting: {} }, 'received_invoice', true).errors.join()).toMatch(/číselný rad/);
+    expect(checkDocument({ ...doc, lines: [] }, 'received_invoice', true).errors.join()).toMatch(/položky/);
+    expect(checkDocument({ ...doc, partner_snapshot: null }, 'received_invoice', true).errors.join()).toMatch(/partner/);
+    expect(checkDocument({ ...doc, currency: 'CZK' }, 'received_invoice', true).errors.join()).toMatch(/CZK/);
+    expect(checkDocument(doc, 'issued_invoice', true).errors.join()).toMatch(/druh/);
   });
 
   it('upozornenia: nesedí suma, dobropis, chýba IČO', () => {
     const w = checkDocument(
       { ...doc, total_amount: 130, subtype: 'credit', partner_snapshot: { name: 'X' } },
       'received_invoice',
-      settings,
       true,
     ).warnings.join(' ');
     expect(w).toMatch(/nesedí/);
@@ -72,7 +76,6 @@ describe('export do MRP', () => {
     const check = checkDocument(
       { ...doc, lines: [{ ...doc.lines[0], unit: 'komplet' }, { ...doc.lines[0], unit: 'balíček', unit_price: '0' }] },
       'received_invoice',
-      settings,
       true,
     );
     expect(check.errors).toEqual([]);

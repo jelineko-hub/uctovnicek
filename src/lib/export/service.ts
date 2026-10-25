@@ -4,23 +4,24 @@
  * Beží s klientom používateľa (RLS); oprávnenia podľa roly z `lib/documentStatus.ts`.
  */
 import { DOCUMENTS_BUCKET } from '../db';
-import { canTransition, isRole, type Role } from '../documentStatus';
-import type { createClient } from '../supabase-server';
+import { canTransition, type Role } from '../documentStatus';
+import { effectiveAccounting, normalizeAccounting } from '../accounting/codes';
+import { loadCodeItems } from '../accounting/service';
+import { memberRole, type Db } from '../membership';
 import { buildMrpXml, MrpExportError } from '../mrp/xml';
 import {
   checkDocument,
   EXPORT_KINDS,
   exportFileName,
-  mrpOptions,
   periodRange,
   toMrpInvoice,
   type DocumentCheck,
   type ExportDocument,
   type ExportKind,
-  type MrpSettings,
 } from './mrpDocument';
 
-export type Db = Awaited<ReturnType<typeof createClient>>;
+export type { Db };
+export { memberRole };
 
 export type ServiceResult<T = object> = ({ ok: true } & T) | { ok: false; code: string; error: string; problems?: Problem[] };
 export interface Problem {
@@ -30,7 +31,7 @@ export interface Problem {
 }
 
 const DOC_SELECT =
-  'id, kind, subtype, status, number, original_number, variable_symbol, constant_symbol, issue_date, tax_point_date, delivery_date, due_date, currency, total_amount, vat_mode, note, partner_snapshot';
+  'id, kind, subtype, status, number, original_number, variable_symbol, constant_symbol, issue_date, tax_point_date, evidence_date, delivery_date, due_date, currency, total_amount, vat_mode, note, partner_snapshot, accounting';
 
 const fail = (code: string, error: string, problems?: Problem[]): { ok: false; code: string; error: string; problems?: Problem[] } => ({
   ok: false,
@@ -39,39 +40,40 @@ const fail = (code: string, error: string, problems?: Problem[]): { ok: false; c
   ...(problems ? { problems } : {}),
 });
 
-export async function memberRole(supabase: Db, companyId: string): Promise<Role | null> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data } = await supabase
-    .from('company_members')
-    .select('role')
-    .eq('company_id', companyId)
-    .eq('user_id', user.id)
-    .maybeSingle();
-  return isRole(data?.role) ? data.role : null;
-}
-
 export const canExport = (role: Role | null) => canTransition('approved', 'exported', role);
 
-async function companyExportSettings(supabase: Db, companyId: string) {
-  const { data } = await supabase.from('companies').select('settings, vat_payer').eq('id', companyId).maybeSingle();
-  const settings = ((data?.settings ?? {}) as { mrp?: MrpSettings }).mrp ?? {};
-  return { settings, vatPayer: data?.vat_payer ?? false };
+async function companyVatPayer(supabase: Db, companyId: string) {
+  const { data } = await supabase.from('companies').select('vat_payer').eq('id', companyId).maybeSingle();
+  return data?.vat_payer ?? false;
 }
 
-/** Doklady v období podľa DUZP, inak dátumu vystavenia. */
+/** Doklady v období podľa dátumu evidencie, inak DUZP, inak dátumu vystavenia (`lib/accounting/periods.ts`). */
 function inPeriod(from: string, to: string) {
-  return `and(tax_point_date.gte.${from},tax_point_date.lte.${to}),and(tax_point_date.is.null,issue_date.gte.${from},issue_date.lte.${to})`;
+  return [
+    `and(evidence_date.gte.${from},evidence_date.lte.${to})`,
+    `and(evidence_date.is.null,tax_point_date.gte.${from},tax_point_date.lte.${to})`,
+    `and(evidence_date.is.null,tax_point_date.is.null,issue_date.gte.${from},issue_date.lte.${to})`,
+  ].join(',');
 }
 
-async function withLines(supabase: Db, docs: Omit<ExportDocument, 'lines'>[]): Promise<ExportDocument[]> {
+type DocRow = Omit<ExportDocument, 'lines' | 'accounting'> & { accounting: unknown };
+
+/** Doplní položky a účtovné údaje (predvolené z číselníkov firmy + hodnoty z dokladu). */
+async function withLines(supabase: Db, companyId: string, docs: DocRow[]): Promise<ExportDocument[]> {
   if (!docs.length) return [];
-  const { data: lines } = await supabase
-    .from('document_lines')
-    .select('document_id, name, quantity, unit, unit_price, vat_rate, discount_percent')
-    .in('document_id', docs.map((d) => d.id))
-    .order('position');
-  return docs.map((d) => ({ ...d, lines: (lines ?? []).filter((l) => l.document_id === d.id) }));
+  const [{ data: lines }, items] = await Promise.all([
+    supabase
+      .from('document_lines')
+      .select('document_id, name, quantity, unit, unit_price, vat_rate, discount_percent')
+      .in('document_id', docs.map((d) => d.id))
+      .order('position'),
+    loadCodeItems(supabase, companyId),
+  ]);
+  return docs.map((d) => ({
+    ...d,
+    accounting: effectiveAccounting(normalizeAccounting(d.accounting), items, d.kind),
+    lines: (lines ?? []).filter((l) => l.document_id === d.id),
+  }));
 }
 
 const docLabel = (d: ExportDocument) =>
@@ -85,9 +87,9 @@ export interface PreviewRow {
 /** Náhľad exportu: schválené doklady v období s kontrolou + počet ešte neschválených. */
 export async function exportPreview(supabase: Db, companyId: string, kind: ExportKind, period: string) {
   const range = periodRange(period);
-  if (!range) return { rows: [] as PreviewRow[], pending: 0, settings: {} as MrpSettings };
-  const [{ settings, vatPayer }, { data: docs }, { count: pending }] = await Promise.all([
-    companyExportSettings(supabase, companyId),
+  if (!range) return { rows: [] as PreviewRow[], pending: 0 };
+  const [vatPayer, { data: docs }, { count: pending }] = await Promise.all([
+    companyVatPayer(supabase, companyId),
     supabase
       .from('documents')
       .select(DOC_SELECT)
@@ -104,11 +106,10 @@ export async function exportPreview(supabase: Db, companyId: string, kind: Expor
       .in('status', ['unprocessed', 'ready'])
       .or(inPeriod(range.from, range.to)),
   ]);
-  const full = await withLines(supabase, (docs ?? []) as Omit<ExportDocument, 'lines'>[]);
+  const full = await withLines(supabase, companyId, (docs ?? []) as DocRow[]);
   return {
-    rows: full.map((doc) => ({ doc, check: checkDocument(doc, kind, settings, vatPayer) })),
+    rows: full.map((doc) => ({ doc, check: checkDocument(doc, kind, vatPayer) })),
     pending: pending ?? 0,
-    settings,
   };
 }
 
@@ -143,16 +144,16 @@ export async function createExport(
     return fail('stale', 'Niektoré vybrané doklady sa medzitým zmenili alebo už nie sú schválené. Obnov stránku.');
   }
 
-  const { settings, vatPayer } = await companyExportSettings(supabase, companyId);
-  const full = await withLines(supabase, docs as Omit<ExportDocument, 'lines'>[]);
+  const vatPayer = await companyVatPayer(supabase, companyId);
+  const full = await withLines(supabase, companyId, docs as DocRow[]);
   const problems = full
-    .map((d) => ({ id: d.id, label: docLabel(d), errors: checkDocument(d, kind, settings, vatPayer).errors }))
+    .map((d) => ({ id: d.id, label: docLabel(d), errors: checkDocument(d, kind, vatPayer).errors }))
     .filter((p) => p.errors.length);
   if (problems.length) return fail('invalid_documents', `Doklady s chybou: ${problems.length}. Oprav ich alebo ich nevyber.`, problems);
 
   let xml: string;
   try {
-    xml = buildMrpXml(EXPORT_KINDS[kind].agenda, full.map((d) => toMrpInvoice(d, kind, settings, vatPayer)), mrpOptions(settings));
+    xml = buildMrpXml(EXPORT_KINDS[kind].agenda, full.map((d) => toMrpInvoice(d, vatPayer)));
   } catch (e) {
     if (e instanceof MrpExportError) return fail('mrp', e.message);
     throw e;
@@ -303,13 +304,4 @@ export async function listExports(supabase: Db, companyId: string) {
     .order('created_at', { ascending: false })
     .limit(50);
   return (data ?? []).map((e) => ({ ...e, count: (e.document_ids as string[] | null)?.length ?? 0 }));
-}
-
-export async function saveMrpSettings(supabase: Db, companyId: string, mrp: MrpSettings): Promise<ServiceResult> {
-  const role = await memberRole(supabase, companyId);
-  if (role !== 'owner' && role !== 'accountant') return fail('forbidden', 'Nastavenie exportu mení majiteľ alebo účtovník.');
-  const { data } = await supabase.from('companies').select('settings').eq('id', companyId).maybeSingle();
-  const settings = { ...((data?.settings ?? {}) as object), mrp };
-  const { error } = await supabase.from('companies').update({ settings }).eq('id', companyId);
-  return error ? fail('db', error.message) : { ok: true };
 }

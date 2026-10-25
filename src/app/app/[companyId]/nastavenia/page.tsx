@@ -1,4 +1,7 @@
+import { CodeListsSettings } from '@/components/CodeListsSettings';
 import { MembersSettings } from '@/components/MembersSettings';
+import { RulesSettings } from '@/components/RulesSettings';
+import { loadCodeItems, loadRules } from '@/lib/accounting/service';
 import { memberRole } from '@/lib/export/service';
 import { canInvite, canManageMembers, listInvites, listMembers } from '@/lib/members/service';
 import { createClient } from '@/lib/supabase-server';
@@ -8,13 +11,16 @@ export default async function SettingsPage({ params }: { params: Promise<{ compa
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const role = await memberRole(supabase, companyId);
-  const [members, invites] = await Promise.all([
+  const [members, invites, items, rules] = await Promise.all([
     listMembers(supabase, companyId),
     canInvite(role) ? listInvites(supabase, companyId) : Promise.resolve([]),
+    loadCodeItems(supabase, companyId),
+    loadRules(supabase, companyId),
   ]);
+  const accountingEditable = role === 'owner' || role === 'accountant';
   return (
     <>
-      <h2>Nastavenia firmy — ľudia</h2>
+      <h2>Ľudia</h2>
       <MembersSettings
         companyId={companyId}
         currentUserId={user?.id ?? ''}
@@ -23,7 +29,10 @@ export default async function SettingsPage({ params }: { params: Promise<{ compa
         canInvite={canInvite(role)}
         canManage={canManageMembers(role)}
       />
-      <p className="small muted">Číselné rady a Typ DPH pre MRP sú v záložke Export.</p>
+
+      <h2 style={{ marginTop: 32 }}>Účtovanie</h2>
+      <CodeListsSettings companyId={companyId} items={items} editable={accountingEditable} />
+      <RulesSettings companyId={companyId} rules={rules} items={items} editable={accountingEditable} />
     </>
   );
 }

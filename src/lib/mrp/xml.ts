@@ -55,6 +55,8 @@ export interface MrpInvoice {
    */
   documentNumber?: string | null;
   documentNumberPrefix?: string | null;
+  /** Kód „Typ DPH" pre tento doklad (inak predvolený pre agendu z `MrpOptions`). */
+  taxCode?: number | null;
   /** UUID dokladu (Účtovníček id) — MRP nepovolí duplicitu, opakovaný import toho istého dokladu odmietne. */
   uuid?: string | null;
   originalNumber?: string | null;  // číslo dodávateľa (prijaté faktúry)
@@ -181,7 +183,7 @@ function invoiceXml(inv: MrpInvoice, agenda: MrpAgenda, o: Required<MrpOptions>)
     throw new MrpExportError(`Doklad ${label(inv)}: chýba číslo dokladu aj prefix číselného radu MRP.`);
   }
 
-  const taxCode = agenda === 'issued' ? o.taxCodeIssued : o.taxCodeIncoming;
+  const taxCode = inv.taxCode ?? (agenda === 'issued' ? o.taxCodeIssued : o.taxCodeIncoming);
   const groups = vatGroups(inv.lines, o.baseRates);
   const sum = (k: VatGroup['kind'], f: 'base' | 'vat') =>
     round2(groups.filter((g) => g.kind === k).reduce((a, g) => a + g[f], 0));

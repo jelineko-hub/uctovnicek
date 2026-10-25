@@ -3,8 +3,9 @@
  * Volá ho API `/api/documents/:id/ekasa`, vyťaženie (keď model prečíta UID) aj nahrávanie s QR kódom.
  * Synchrónne (~1 s, timeout 5 s); do tabuľky `jobs` sa presunie v E7 spolu s vyťažovaním.
  */
+import { applyAccountingRules } from '../accounting/service';
 import { refreshDuplicateOf } from '../duplicates';
-import type { Db } from '../export/service';
+import type { Db } from '../membership';
 import { lookupEkasaReceipt } from './lookup';
 import { ekasaToDocument } from './toDocument';
 import { normalizeEkasaUid } from './uid';
@@ -54,5 +55,6 @@ export async function applyEkasa(supabase: Db, docId: string, uidInput?: string 
     diff: { action: 'ekasa', uid },
   });
   await refreshDuplicateOf(supabase, docId);
+  await applyAccountingRules(supabase, docId);
   return { ok: true, warnings };
 }

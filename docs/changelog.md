@@ -1,5 +1,23 @@
 # Changelog
 
+## Téma v0.012 — E6: číselníky, automatické účtovanie, uzávierky
+- **Číselníky** (Nastavenia → Účtovanie): predkontácia (MRP číslo), Typ DPH, stredisko (6), zákazka (15), číselný rad
+  (prefix, 10); pridanie, predvolená/aktívna, platnosť pre druh dokladu, import CSV `kód;názov`. Nastavenie exportu
+  z E3 (`companies.settings.mrp`) presunuté do číselníkov ako predvolené hodnoty. `lib/accounting/codes.ts` + testy.
+- **Účtovanie na doklade** (`documents.accounting`, mení len účtovník): editor sekcia „Účtovanie" s výberom z číselníkov;
+  export do MRP posiela `DoubleEntryBookkeepingCode`, `CostCentre`, `ContractNumber`, `TaxCode` a prefix radu z dokladu,
+  inak predvolené firmy.
+- **Automatické účtovanie:** pravidlá (IČO / druh / text → účtovné údaje, priorita, aktívne) sa uplatnia po vyťažení,
+  eKasa a uložení dokladu, ak doklad ešte nemá účtovné údaje; návrh z posledných 5 dokladov partnera; „Uložiť ako
+  pravidlo" z editora.
+- **Uzávierky** (Export → Uzávierky): mesiace s počtami dokladov, uzavrieť (majiteľ, účtovník) / otvoriť (len účtovník).
+  Doklad patrí do mesiaca podľa dátumu evidencie → DUZP → vystavenia (`lib/accounting/periods.ts`, export aj DB).
+  Spracovaný doklad v uzavretom mesiaci je len na čítanie (DB trigger); pri potvrdení dokladu z uzavretého mesiaca editor
+  ponúkne dátum evidencie v najbližšom otvorenom. Prehľad firiem: stĺpec „Uzavreté do".
+- API: `GET /api/companies/:id/code-lists`, `GET/POST /api/companies/:id/periods`. `lib/membership.ts` (Db, memberRole).
+- Migrácia `20261025160000_e6_accounting_periods.sql`: `company_code_lists`, `accounting_periods`, `documents.evidence_date`,
+  `accounting_rules.name/active`, `period_closed()`, triggery obdobia, `company_overview()` + `last_closed_period`.
+
 ## Téma v0.011 — E5: pozvánky, členovia, prehľad firiem
 - **Nastavenia firmy → ľudia:** zoznam členov (majiteľ mení rolu, odoberá; firma nesmie ostať bez majiteľa — trigger),
   pozvánka e-mail + rola → odkaz `/pozvanka/<token>` na 14 dní (zatiaľ ho používateľ pošle sám, e-mail v E7),

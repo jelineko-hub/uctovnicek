@@ -4,8 +4,7 @@
  * Pozvánka = odkaz `/pozvanka/<token>` (zatiaľ ho používateľ pošle sám; e-mail v E7).
  */
 import { isRole, type Role } from '../documentStatus';
-import type { Db } from '../export/service';
-import { memberRole } from '../export/service';
+import { memberRole, type Db } from '../membership';
 
 export type Result<T = object> = ({ ok: true } & T) | { ok: false; code: string; error: string };
 const fail = (code: string, error: string): { ok: false; code: string; error: string } => ({ ok: false, code, error });
@@ -130,6 +129,8 @@ export interface OverviewRow {
   overdue_issued: number;
   last_export_at: string | null;
   last_export_status: string | null;
+  /** Posledný uzavretý mesiac 'YYYY-MM'. */
+  last_closed_period: string | null;
 }
 
 export async function companyOverview(supabase: Db): Promise<OverviewRow[]> {

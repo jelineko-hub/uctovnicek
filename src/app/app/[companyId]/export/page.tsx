@@ -1,6 +1,9 @@
 import { ExportHistory } from '@/components/export/ExportHistory';
 import { ExportPreview } from '@/components/export/ExportPreview';
-import { MrpSettingsForm } from '@/components/export/MrpSettingsForm';
+import Link from 'next/link';
+import { PeriodsPanel, type PeriodRow } from '@/components/export/PeriodsPanel';
+import { closedPeriods } from '@/lib/accounting/service';
+import { documentPeriodDate, periodOf, recentPeriods } from '@/lib/accounting/periods';
 import { EXPORT_KINDS, isExportKind, periodRange, previousPeriod, type ExportKind } from '@/lib/export/mrpDocument';
 import { canExport, exportPreview, listExports, memberRole } from '@/lib/export/service';
 import { createClient } from '@/lib/supabase-server';
@@ -18,11 +21,32 @@ export default async function ExportPage({
   const period = sp.obdobie && periodRange(sp.obdobie) ? sp.obdobie : previousPeriod();
 
   const supabase = await createClient();
-  const [role, preview, exports] = await Promise.all([
+  const months = recentPeriods(new Date().toISOString().slice(0, 7), 12);
+  const from = `${months[months.length - 1]}-01`;
+  const [role, preview, exports, closed, { data: periodDocs }] = await Promise.all([
     memberRole(supabase, companyId),
     exportPreview(supabase, companyId, kind, period),
     listExports(supabase, companyId),
+    closedPeriods(supabase, companyId),
+    supabase
+      .from('documents')
+      .select('status, evidence_date, tax_point_date, issue_date')
+      .eq('company_id', companyId)
+      .or(`evidence_date.gte.${from},tax_point_date.gte.${from},issue_date.gte.${from}`)
+      .limit(10000),
   ]);
+  const periodRows: PeriodRow[] = months.map((p) => {
+    const docs = (periodDocs ?? []).filter((d) => periodOf(documentPeriodDate(d)) === p);
+    const n = (s: string) => docs.filter((d) => d.status === s).length;
+    return {
+      period: p,
+      closed: closed.has(p),
+      unprocessed: n('unprocessed'),
+      ready: n('ready'),
+      approved: n('approved'),
+      exported: n('exported') + n('archived'),
+    };
+  });
   const allowed = canExport(role);
 
   return (
@@ -30,10 +54,9 @@ export default async function ExportPage({
       <h2>Export do MRP-K/S</h2>
       {!allowed && <p className="note">Exportovať môže účtovník firmy. Ty vidíš len náhľad a históriu.</p>}
 
-      <details className="card" style={{ marginBottom: 16 }}>
-        <summary>Nastavenie exportu (číselné rady a Typ DPH v MRP)</summary>
-        <MrpSettingsForm companyId={companyId} settings={preview.settings} editable={role === 'owner' || role === 'accountant'} />
-      </details>
+      <p className="small muted">
+        Číselné rady, Typ DPH, predkontácie a strediská sú v <Link href={`/app/${companyId}/nastavenia`}>Nastaveniach → Číselníky</Link>.
+      </p>
 
       <form className="filters" method="get">
         <select name="druh" defaultValue={kind}>
@@ -60,6 +83,9 @@ export default async function ExportPage({
 
       <h3>Exporty</h3>
       <ExportHistory companyId={companyId} exports={exports} allowed={allowed} />
+
+      <h3>Uzávierky</h3>
+      <PeriodsPanel companyId={companyId} rows={periodRows} canClose={role === 'owner' || role === 'accountant'} canOpen={role === 'accountant'} />
     </>
   );
 }

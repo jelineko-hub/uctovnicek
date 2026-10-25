@@ -5,6 +5,9 @@ import { z } from 'zod';
 import { DOCUMENTS_BUCKET } from '@/lib/db';
 import { KINDS, PAYMENT_METHODS, STATUSES, SUBTYPES, VAT_MODES, type Status } from '@/lib/documentKinds';
 import { canDelete, canTransition, editBlockedReason, isRole, type Role } from '@/lib/documentStatus';
+import { normalizeAccounting, type Accounting } from '@/lib/accounting/codes';
+import { periodLabel } from '@/lib/accounting/periods';
+import { applyAccountingRules, periodCheck, saveRuleFromDocument } from '@/lib/accounting/service';
 import { refreshDuplicateOf } from '@/lib/duplicates';
 import { isValidIban, normalizeIban } from '@/lib/iban';
 import { createClient } from '@/lib/supabase-server';
@@ -42,6 +45,8 @@ const documentInput = z.object({
   vat_mode: z.enum(keys(VAT_MODES)),
   note: optText,
   internal_note: optText,
+  evidence_date: optDate.optional(),
+  accounting: z.record(z.string(), z.string()).optional(),
   lines: z.array(
     z.object({
       name: z.string().trim().min(1),
@@ -54,7 +59,8 @@ const documentInput = z.object({
 });
 export type DocumentInput = z.input<typeof documentInput>;
 
-type Result = { ok: true } | { ok: false; error: string };
+/** `evidenceDate` = návrh dátumu evidencie, keď obdobie dokladu je uzavreté. */
+type Result = { ok: true } | { ok: false; error: string; evidenceDate?: string };
 
 async function context(docId: string) {
   const supabase = await createClient();
@@ -124,6 +130,18 @@ async function save(docId: string, input: DocumentInput, confirm: boolean): Prom
     }
     if (d.partner.iban) d.partner.iban = normalizeIban(d.partner.iban);
 
+    // Spracovaný doklad nesmie patriť do uzavretého obdobia (DB trigger) → ponúknuť dátum evidencie v otvorenom.
+    if (confirm || doc.status !== 'unprocessed') {
+      const closed = await periodCheck(supabase, doc.company_id, d);
+      if (closed) {
+        return {
+          ok: false,
+          error: `Obdobie ${periodLabel(closed.period)} je uzavreté. Zaeviduj doklad do otvoreného obdobia.`,
+          evidenceDate: closed.evidenceDate,
+        };
+      }
+    }
+
     if (confirm) {
       const problems: string[] = [];
       if (!d.issue_date) problems.push('dátum vystavenia');
@@ -158,6 +176,9 @@ async function save(docId: string, input: DocumentInput, confirm: boolean): Prom
         vat_mode: d.vat_mode,
         note: d.note,
         internal_note: d.internal_note,
+        ...(d.evidence_date !== undefined ? { evidence_date: d.evidence_date } : {}),
+        // Účtovné údaje mení len účtovník (ostatným sa ich hodnoty nezobrazujú → nič neprepíšu).
+        ...(role === 'accountant' && d.accounting ? { accounting: normalizeAccounting(d.accounting) } : {}),
         ...(confirm && doc.status === 'unprocessed' ? { status: 'ready' } : {}),
       })
       .eq('id', docId);
@@ -176,6 +197,7 @@ async function save(docId: string, input: DocumentInput, confirm: boolean): Prom
       diff: { action: confirm ? 'confirmed' : 'saved' },
     });
     await refreshDuplicateOf(supabase, docId);
+    await applyAccountingRules(supabase, docId);
     revalidatePath(`/app/${doc.company_id}`, 'layout');
     return { ok: true };
   } catch (e) {
@@ -247,5 +269,22 @@ export async function deleteDocument(docId: string): Promise<Result> {
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** „Uložiť ako pravidlo": tento partner (IČO) + druh dokladu → tieto účtovné údaje. */
+export async function saveAccountingRuleFromDocument(docId: string, accounting: Accounting): Promise<Result> {
+  try {
+    const { supabase, doc, role } = await context(docId);
+    if (role !== 'accountant' && role !== 'owner') return fail('Pravidlá spravuje majiteľ alebo účtovník.');
+    const { data } = await supabase.from('documents').select('kind, partner_snapshot').eq('id', docId).single();
+    const partner = (data?.partner_snapshot ?? {}) as { ico?: string | null; name?: string | null };
+    if (!partner.ico) return fail('Partner nemá IČO — pravidlo sa dá vytvoriť v Nastaveniach s podmienkou na text.');
+    const res = await saveRuleFromDocument(supabase, doc.company_id, partner.ico, data!.kind, partner.name ?? null, accounting);
+    if (!res.ok) return fail(res.error);
+    revalidatePath(`/app/${doc.company_id}`, 'layout');
+    return { ok: true };
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : String(e));
   }
 }

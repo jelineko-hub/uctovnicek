@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { AccountBar } from '@/components/AccountBar';
+import { periodLabel } from '@/lib/accounting/periods';
 import { EXPORT_STATUSES, type ExportStatus } from '@/lib/export/mrpDocument';
 import { ROLE_LABELS } from '@/lib/members/roles';
 import { companyOverview, type OverviewRow } from '@/lib/members/service';
@@ -41,6 +42,7 @@ export default async function AppHome() {
                   <th className="num" title="Prijaté faktúry po splatnosti, ktoré nie sú označené ako zaplatené">Mám zaplatiť</th>
                   <th className="num" title="Vydané faktúry po splatnosti, ktoré nie sú označené ako zaplatené">Dlžia mne</th>
                   {checker && <th>Posledný export</th>}
+                  <th>Uzavreté do</th>
                 </tr>
               </thead>
               <tbody>
@@ -73,6 +75,7 @@ export default async function AppHome() {
                         )}
                       </td>
                     )}
+                    <td className="small">{r.last_closed_period ? periodLabel(r.last_closed_period) : <span className="muted">—</span>}</td>
                   </tr>
                 ))}
               </tbody>

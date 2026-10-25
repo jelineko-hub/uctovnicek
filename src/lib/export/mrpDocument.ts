@@ -3,6 +3,8 @@
  * XML skladá `lib/mrp/xml.ts`; tu je len mapovanie, nastavenia firmy a hlášky pre náhľad exportu.
  */
 import { buildMrpXml, MrpExportError, type MrpAgenda, type MrpInvoice } from '../mrp/xml';
+import type { Accounting } from '../accounting/codes';
+import { documentPeriodDate } from '../accounting/periods';
 import { totals } from '../vat';
 
 export type ExportKind = 'received_invoice' | 'issued_invoice';
@@ -21,16 +23,6 @@ export const EXPORT_STATUSES = {
   cancelled: 'Zrušený',
 } as const;
 export type ExportStatus = keyof typeof EXPORT_STATUSES;
-
-/** Nastavenie exportu do MRP vo firme (`companies.settings.mrp`). */
-export interface MrpSettings {
-  /** Prefix číselného radu v MRP — doklad očísluje MRP pri importe. */
-  prefix_received?: string | null;
-  prefix_issued?: string | null;
-  /** Kód „Typ DPH" z číselníka MRP (predvolené 40 prijaté / 10 vydané podľa dokumentácie). */
-  tax_code_received?: number | null;
-  tax_code_issued?: number | null;
-}
 
 export interface ExportLine {
   name: string;
@@ -51,6 +43,7 @@ export interface ExportDocument {
   constant_symbol: string | null;
   issue_date: string | null;
   tax_point_date: string | null;
+  evidence_date?: string | null;
   delivery_date: string | null;
   due_date: string | null;
   currency: string;
@@ -68,6 +61,8 @@ export interface ExportDocument {
     country_code?: string | null;
   } | null;
   lines: ExportLine[];
+  /** Účtovné údaje pre export: predvolené z číselníkov firmy prepísané hodnotami z dokladu (`effectiveAccounting`). */
+  accounting: Accounting;
 }
 
 /** Bežné jednotky → skratka do 3 znakov (MRP `UnitCode` je text max. 3 znaky). */
@@ -90,21 +85,16 @@ export function mrpUnit(unit: string | null | undefined): string | null {
   return UNIT_ALIASES[u.toLowerCase()] ?? null;
 }
 
-const prefixFor = (kind: ExportKind, s: MrpSettings) =>
-  (kind === 'received_invoice' ? s.prefix_received : s.prefix_issued)?.trim() || null;
-
-export function mrpOptions(s: MrpSettings) {
-  return {
-    ...(s.tax_code_received ? { taxCodeIncoming: Number(s.tax_code_received) } : {}),
-    ...(s.tax_code_issued ? { taxCodeIssued: Number(s.tax_code_issued) } : {}),
-  };
-}
-
-export function toMrpInvoice(doc: ExportDocument, kind: ExportKind, s: MrpSettings, vatPayer: boolean): MrpInvoice {
+export function toMrpInvoice(doc: ExportDocument, vatPayer: boolean): MrpInvoice {
   const p = doc.partner_snapshot ?? {};
+  const a = doc.accounting;
   return {
     documentNumber: doc.number?.trim() || null,
-    documentNumberPrefix: doc.number?.trim() ? null : prefixFor(kind, s),
+    documentNumberPrefix: doc.number?.trim() ? null : a.numeric_series ?? null,
+    taxCode: a.vat_code ? Number(a.vat_code) : null,
+    bookkeepingCode: a.bookkeeping_code ?? null,
+    costCentre: a.cost_centre ?? null,
+    contractNumber: a.project ?? null,
     uuid: doc.id,
     originalNumber: doc.original_number,
     docType: doc.subtype === 'credit' ? 'credit' : doc.subtype === 'debit' ? 'debit' : 'invoice',
@@ -145,19 +135,19 @@ export interface DocumentCheck {
 }
 
 /** Kontrola jedného dokladu pred exportom: chyby export zastavia, upozornenia nie. */
-export function checkDocument(doc: ExportDocument, kind: ExportKind, s: MrpSettings, vatPayer: boolean): DocumentCheck {
+export function checkDocument(doc: ExportDocument, kind: ExportKind, vatPayer: boolean): DocumentCheck {
   const errors: string[] = [];
   const warnings: string[] = [];
   if (doc.kind !== kind) errors.push('Iný druh dokladu, než sa exportuje.');
   if (!doc.issue_date) errors.push('Chýba dátum vystavenia.');
   if (!doc.partner_snapshot?.name) errors.push('Chýba partner.');
   if (!doc.lines.length) errors.push('Doklad nemá položky (MRP ich vyžaduje).');
-  if (!doc.number?.trim() && !prefixFor(kind, s)) {
-    errors.push('Chýba prefix číselného radu MRP v nastavení exportu.');
+  if (!doc.number?.trim() && !doc.accounting.numeric_series) {
+    errors.push('Chýba číselný rad MRP — nastav predvolený v Nastaveniach → Číselníky alebo ho vyber na doklade.');
   }
   if (!errors.length) {
     try {
-      buildMrpXml(EXPORT_KINDS[kind].agenda, [toMrpInvoice(doc, kind, s, vatPayer)], mrpOptions(s));
+      buildMrpXml(EXPORT_KINDS[kind].agenda, [toMrpInvoice(doc, vatPayer)]);
     } catch (e) {
       if (!(e instanceof MrpExportError)) throw e;
       errors.push(e.message);
@@ -208,9 +198,8 @@ export function previousPeriod(today = new Date()): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-/** Dátum, podľa ktorého doklad patrí do obdobia: DUZP, inak dátum vystavenia. */
-export const periodDate = (d: { tax_point_date: string | null; issue_date: string | null }) =>
-  d.tax_point_date ?? d.issue_date;
+/** Dátum, podľa ktorého doklad patrí do obdobia: evidencia → DUZP → vystavenie (`lib/accounting/periods.ts`). */
+export const periodDate = documentPeriodDate;
 
 export function exportFileName(kind: ExportKind, period: string, exportId: string) {
   return `MRP_${EXPORT_KINDS[kind].short}_${period}_${exportId.slice(0, 8)}.xml`;

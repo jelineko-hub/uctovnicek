@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { DOCUMENTS_BUCKET } from '@/lib/db';
+import { applyAccountingRules } from '@/lib/accounting/service';
 import { refreshDuplicateOf } from '@/lib/duplicates';
 import { applyEkasa } from '@/lib/ekasa/service';
 import { normalizeEkasaUid } from '@/lib/ekasa/uid';
@@ -90,6 +91,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     ekasa = res.ok ? { ok: true } : { ok: false, error: res.error };
   }
   const duplicateOf = await refreshDuplicateOf(supabase, id);
+  await applyAccountingRules(supabase, id);
 
   return NextResponse.json({
     ok: true,

@@ -1,6 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { isCodeList, type Accounting, type CodeList, type RuleMatch } from '@/lib/accounting/codes';
+import { deleteCodeItem, deleteRule, importCodeCsv, saveCodeItem, saveRule, type CodeItemInput } from '@/lib/accounting/service';
 import { changeMemberRole, createInvite, deleteInvite, removeMember } from '@/lib/members/service';
 import { createClient } from '@/lib/supabase-server';
 
@@ -21,3 +23,24 @@ export const changeRoleAction = async (companyId: string, userId: string, role: 
   run(companyId, (db) => changeMemberRole(db, companyId, userId, role));
 export const removeMemberAction = async (companyId: string, userId: string) =>
   run(companyId, (db) => removeMember(db, companyId, userId));
+
+// ── Číselníky a pravidlá (E6) ────────────────────────────────────
+
+export const saveCodeItemAction = async (companyId: string, input: CodeItemInput, id?: string) =>
+  isCodeList(input.list) ? run(companyId, (db) => saveCodeItem(db, companyId, input, id)) : ({ ok: false, error: 'Neznámy číselník.' } as const);
+export const deleteCodeItemAction = async (companyId: string, id: string) => run(companyId, (db) => deleteCodeItem(db, companyId, id));
+
+export async function importCodeCsvAction(companyId: string, list: CodeList, text: string) {
+  if (!isCodeList(list)) return { ok: false as const, error: 'Neznámy číselník.' };
+  const res = await importCodeCsv(await createClient(), companyId, list, text);
+  if (!res.ok) return { ok: false as const, error: res.error };
+  revalidatePath(`/app/${companyId}/nastavenia`);
+  return { ok: true as const, imported: res.imported, errors: res.errors };
+}
+
+export const saveRuleAction = async (
+  companyId: string,
+  input: { name?: string | null; match: RuleMatch; accounting: Accounting; priority?: number; active?: boolean },
+  id?: string,
+) => run(companyId, (db) => saveRule(db, companyId, input, id));
+export const deleteRuleAction = async (companyId: string, id: string) => run(companyId, (db) => deleteRule(db, companyId, id));

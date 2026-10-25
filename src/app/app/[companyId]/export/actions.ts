@@ -1,9 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
 import { isExportKind, type ExportKind } from '@/lib/export/mrpDocument';
-import { cancelExport, createExport, saveMrpSettings, setExportStatus, type Problem } from '@/lib/export/service';
+import { setPeriodStatus } from '@/lib/accounting/service';
+import { cancelExport, createExport, setExportStatus, type Problem } from '@/lib/export/service';
 import { createClient } from '@/lib/supabase-server';
 
 type Result = { ok: true; message?: string } | { ok: false; error: string; problems?: Problem[] };
@@ -37,20 +37,9 @@ export async function setExportStatusAction(
   return { ok: true };
 }
 
-const optCode = z.string().trim().max(10).transform((s) => s || null);
-const optTax = z.string().trim().transform((s) => (s ? Number(s) : null)).refine((n) => n == null || (Number.isInteger(n) && n > 0), 'kód');
-const settingsInput = z.object({
-  prefix_received: optCode,
-  prefix_issued: optCode,
-  tax_code_received: optTax,
-  tax_code_issued: optTax,
-});
-
-export async function saveMrpSettingsAction(companyId: string, input: z.input<typeof settingsInput>): Promise<Result> {
-  const parsed = settingsInput.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Prefix má najviac 10 znakov, Typ DPH je kladné celé číslo.' };
-  const res = await saveMrpSettings(await createClient(), companyId, parsed.data);
+export async function setPeriodStatusAction(companyId: string, period: string, status: 'open' | 'closed'): Promise<Result> {
+  const res = await setPeriodStatus(await createClient(), companyId, period, status);
   if (!res.ok) return { ok: false, error: res.error };
   done(companyId);
-  return { ok: true, message: 'Nastavenie uložené.' };
+  return { ok: true };
 }

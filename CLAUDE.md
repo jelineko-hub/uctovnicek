@@ -57,3 +57,5 @@ Funkčný vzor: Doklado (analýza v `docs/analyza-doklado.md`) — preberáme fu
   → DPH vždy `totals(lines, { pricesWithVat })` podľa dokladu, inak vyjde o cent iná DPH než na bločku.
 - Členstvo len cez pozvánky (`lib/members/`, RPC `accept_invite` — e-mail účtu = e-mail pozvánky); e-maily členov len cez
   RPC `company_member_list` (auth.users nie je cez RLS). Presmerovanie po prihlásení len cez `safeNext`.
+- Účtovné údaje dokladu len cez `lib/accounting/codes.ts` (kľúče = `company_code_lists.list`); export berie `effectiveAccounting`
+  (predvolené firmy + doklad). Obdobie dokladu = evidencia → DUZP → vystavenie — rovnako v TS (`periods.ts`), exporte aj DB triggeri.
