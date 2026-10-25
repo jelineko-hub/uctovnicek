@@ -37,4 +37,7 @@ Funkčný vzor: Doklado (analýza v `docs/analyza-doklado.md`) — preberáme fu
 - SK sadzby DPH od 2025: 23 % základná, 19 % a 5 % znížené → MRP export vždy posiela rozpis `SumValues`.
 - MRP-K/S: databáza je Windows-1250 → texty cez `toCp1250Safe`; `DocumentNumber` max 10 znakov, jedinečné;
   vydané a prijaté faktúry sa v jednom XML nemiešajú; kódy „Typ DPH" (SK 10/40) sú nastaviteľné per firma.
-- Body serverless funkcie ~4,5 MB → súbory dokladov nahrávať priamo do Storage (`documents/<company_id>/…`).
+- Vyťaženie dokladov: len server (`lib/extraction/extract.ts`, kľúč `ANTHROPIC_API_KEY` na Verceli), model
+  `claude-opus-5-5`; výstup cez `toDocument` (čistá funkcia) — nová kolónka = schema.ts + toDocument + editor.
+- Názvy druhov/stavov len z `lib/documentKinds.ts`; DPH výpočty len cez `lib/vat.ts`.
+- Body serverless funkcie ~4,5 MB → súbory dokladov nahrávať priamo do Storage (`uctovnicek-documents/<company_id>/<document_id>/…`).

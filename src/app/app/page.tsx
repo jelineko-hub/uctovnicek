@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase-server';
 import { APP_VERSION } from '@/lib/version';
 import { createCompany } from './actions';
@@ -17,7 +18,7 @@ export default async function AppHome() {
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {companies.map((c) => (
               <li key={c.id}>
-                {c.name} {c.ico && <span className="muted">IČO {c.ico}</span>}
+                <Link href={`/app/${c.id}`}>{c.name}</Link> {c.ico && <span className="muted">IČO {c.ico}</span>}
               </li>
             ))}
           </ul>

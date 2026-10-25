@@ -1,0 +1,201 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+import { DOCUMENTS_BUCKET } from '@/lib/db';
+import { KINDS, PAYMENT_METHODS, SUBTYPES, VAT_MODES } from '@/lib/documentKinds';
+import { isValidIban, normalizeIban } from '@/lib/iban';
+import { createClient } from '@/lib/supabase-server';
+import { totals } from '@/lib/vat';
+
+const keys = <T extends Record<string, string>>(o: T) => Object.keys(o) as [keyof T & string, ...(keyof T & string)[]];
+const optText = z.string().trim().transform((s) => s || null).nullable();
+const optDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().or(z.literal('').transform(() => null));
+
+const partnerSchema = z.object({
+  name: optText,
+  ico: optText,
+  dic: optText,
+  ic_dph: optText,
+  street: optText,
+  city: optText,
+  zip: optText,
+  country_code: optText,
+  iban: optText,
+});
+
+const documentInput = z.object({
+  kind: z.enum(keys(KINDS)),
+  subtype: z.enum(keys(SUBTYPES)),
+  partner: partnerSchema,
+  original_number: optText,
+  variable_symbol: optText,
+  constant_symbol: optText,
+  issue_date: optDate,
+  tax_point_date: optDate,
+  due_date: optDate,
+  currency: z.string().trim().length(3).transform((s) => s.toUpperCase()),
+  total_amount: z.number().nullable(),
+  payment_method: z.enum(keys(PAYMENT_METHODS)).nullable(),
+  vat_mode: z.enum(keys(VAT_MODES)),
+  note: optText,
+  internal_note: optText,
+  lines: z.array(
+    z.object({
+      name: z.string().trim().min(1),
+      quantity: z.number(),
+      unit: optText,
+      unit_price: z.number(),
+      vat_rate: z.number(),
+    }),
+  ),
+});
+export type DocumentInput = z.input<typeof documentInput>;
+
+type Result = { ok: true } | { ok: false; error: string };
+
+async function context(docId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Neprihlásený používateľ.');
+  const { data: doc } = await supabase
+    .from('documents')
+    .select('id, company_id, status, partner_id')
+    .eq('id', docId)
+    .maybeSingle();
+  if (!doc) throw new Error('Doklad neexistuje alebo k nemu nemáš prístup.');
+  return { supabase, doc };
+}
+
+/** Nájde partnera podľa IČO (alebo presného názvu, ak IČO chýba) a aktualizuje / založí ho. */
+async function upsertPartner(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  companyId: string,
+  p: z.infer<typeof partnerSchema>,
+): Promise<string | null> {
+  if (!p.name && !p.ico) return null;
+  let query = supabase.from('partners').select('id').eq('company_id', companyId).limit(1);
+  query = p.ico ? query.eq('ico', p.ico) : query.eq('name', p.name!);
+  const { data: found } = await query.maybeSingle();
+  const row = {
+    name: p.name ?? p.ico!,
+    ico: p.ico,
+    dic: p.dic,
+    ic_dph: p.ic_dph,
+    iban: p.iban,
+    address: { street: p.street, city: p.city, zip: p.zip, country: p.country_code },
+  };
+  if (found) {
+    await supabase.from('partners').update(row).eq('id', found.id);
+    return found.id;
+  }
+  const { data: created, error } = await supabase
+    .from('partners')
+    .insert({ ...row, company_id: companyId })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+  return created.id;
+}
+
+async function save(docId: string, input: DocumentInput, confirm: boolean): Promise<Result> {
+  const parsed = documentInput.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: `Neplatné údaje: ${parsed.error.issues.map((i) => i.path.join('.')).join(', ')}` };
+  }
+  const d = parsed.data;
+  try {
+    const { supabase, doc } = await context(docId);
+    if (d.partner.iban) d.partner.iban = normalizeIban(d.partner.iban);
+
+    if (confirm) {
+      const problems: string[] = [];
+      if (!d.issue_date) problems.push('dátum vystavenia');
+      if (!d.partner.name) problems.push('partner');
+      if (d.total_amount == null && !d.lines.length) problems.push('suma alebo položky');
+      if (d.partner.iban && !isValidIban(d.partner.iban)) problems.push('platný IBAN partnera');
+      if (problems.length) return { ok: false, error: `Na potvrdenie chýba: ${problems.join(', ')}.` };
+    }
+
+    const computed = totals(d.lines.map((l) => ({ quantity: l.quantity, unitPrice: l.unit_price, vatRate: l.vat_rate })));
+    const partnerId = confirm ? await upsertPartner(supabase, doc.company_id, d.partner) : doc.partner_id;
+
+    const { error } = await supabase
+      .from('documents')
+      .update({
+        kind: d.kind,
+        subtype: d.subtype,
+        partner_id: partnerId,
+        partner_snapshot: d.partner,
+        original_number: d.original_number,
+        variable_symbol: d.variable_symbol,
+        constant_symbol: d.constant_symbol,
+        issue_date: d.issue_date,
+        tax_point_date: d.tax_point_date,
+        due_date: d.due_date,
+        currency: d.currency,
+        total_amount: d.total_amount ?? (d.lines.length ? computed.total : null),
+        payment_method: d.payment_method,
+        vat_mode: d.vat_mode,
+        note: d.note,
+        internal_note: d.internal_note,
+        ...(confirm && doc.status === 'unprocessed' ? { status: 'ready' } : {}),
+      })
+      .eq('id', docId);
+    if (error) return { ok: false, error: error.message };
+
+    await supabase.from('document_lines').delete().eq('document_id', docId);
+    if (d.lines.length) {
+      const { error: lineError } = await supabase.from('document_lines').insert(
+        d.lines.map((l, i) => ({ ...l, position: i, document_id: docId, company_id: doc.company_id })),
+      );
+      if (lineError) return { ok: false, error: lineError.message };
+    }
+    await supabase.from('document_history').insert({
+      document_id: docId,
+      company_id: doc.company_id,
+      diff: { action: confirm ? 'confirmed' : 'saved' },
+    });
+    revalidatePath(`/app/${doc.company_id}`, 'layout');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function saveDocument(docId: string, input: DocumentInput) {
+  return save(docId, input, false);
+}
+
+export async function confirmDocument(docId: string, input: DocumentInput) {
+  return save(docId, input, true);
+}
+
+/** Vráti doklad medzi nespracované (napr. na opätovné vyťaženie). Exportovaný doklad nie. */
+export async function reopenDocument(docId: string): Promise<Result> {
+  try {
+    const { supabase, doc } = await context(docId);
+    if (doc.status === 'exported') return { ok: false, error: 'Exportovaný doklad sa nedá vrátiť.' };
+    const { error } = await supabase.from('documents').update({ status: 'unprocessed' }).eq('id', docId);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath(`/app/${doc.company_id}`, 'layout');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function deleteDocument(docId: string): Promise<Result> {
+  try {
+    const { supabase, doc } = await context(docId);
+    if (doc.status === 'exported') return { ok: false, error: 'Exportovaný doklad sa nedá zmazať.' };
+    const { data: files } = await supabase.from('document_files').select('storage_path').eq('document_id', docId);
+    if (files?.length) await supabase.storage.from(DOCUMENTS_BUCKET).remove(files.map((f) => f.storage_path));
+    const { error } = await supabase.from('documents').delete().eq('id', docId);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath(`/app/${doc.company_id}`, 'layout');
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
