@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { safeNext } from '@/lib/safeNext';
 import { createClient } from '@/lib/supabase-server';
 
 export async function GET(request: NextRequest) {
@@ -7,5 +8,6 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     await supabase.auth.exchangeCodeForSession(code);
   }
-  return NextResponse.redirect(new URL('/app', request.url));
+  const target = safeNext(request.nextUrl.searchParams.get('next')) ?? '/app';
+  return NextResponse.redirect(new URL(target, request.url));
 }

@@ -55,3 +55,5 @@ Funkčný vzor: Doklado (analýza v `docs/analyza-doklado.md`) — preberáme fu
   ktorú volajú aj server actions. Export do MRP len cez `lib/export/` (Účtovníček nečísluje — prefix radu + UUID, číslo pridelí MRP).
 - eKasa len cez `lib/ekasa/` (neoficiálne API FS — vždy fallback na vyťaženie); bločky majú `prices_with_vat = true`
   → DPH vždy `totals(lines, { pricesWithVat })` podľa dokladu, inak vyjde o cent iná DPH než na bločku.
+- Členstvo len cez pozvánky (`lib/members/`, RPC `accept_invite` — e-mail účtu = e-mail pozvánky); e-maily členov len cez
+  RPC `company_member_list` (auth.users nie je cez RLS). Presmerovanie po prihlásení len cez `safeNext`.

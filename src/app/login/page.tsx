@@ -1,7 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { safeNext } from '@/lib/safeNext';
 import { createClient } from '@/lib/supabase-browser';
+
+/** Návrat po prihlásení (napr. na pozvánku) — len relatívna cesta v rámci appky. */
+function nextQuery(): string {
+  const safe = safeNext(new URLSearchParams(window.location.search).get('next'));
+  return safe ? `?next=${encodeURIComponent(safe)}` : '';
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -15,7 +22,7 @@ export default function LoginPage() {
     setState('sending');
     const { error } = await createClient().auth.signInWithOtp({
       email: value,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback${nextQuery()}` },
     });
     if (error) {
       setError(error.message);

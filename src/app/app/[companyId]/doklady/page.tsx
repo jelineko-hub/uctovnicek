@@ -9,7 +9,7 @@ export default async function DocumentsPage({
   searchParams,
 }: {
   params: Promise<{ companyId: string }>;
-  searchParams: Promise<{ druh?: string; stav?: string; q?: string; od?: string; do?: string }>;
+  searchParams: Promise<{ druh?: string; stav?: string; q?: string; od?: string; do?: string; po_splatnosti?: string }>;
 }) {
   const { companyId } = await params;
   const sp = await searchParams;
@@ -28,6 +28,13 @@ export default async function DocumentsPage({
   if (status) query = query.eq('status', status);
   if (sp.od) query = query.gte('issue_date', sp.od);
   if (sp.do) query = query.lte('issue_date', sp.do);
+  const overdue = sp.po_splatnosti === '1';
+  if (overdue) {
+    query = query
+      .lt('due_date', new Date().toISOString().slice(0, 10))
+      .neq('payment_status', 'paid')
+      .neq('status', 'rejected');
+  }
   const { data } = await query;
 
   const needle = fold((sp.q ?? '').trim());
@@ -37,7 +44,10 @@ export default async function DocumentsPage({
 
   return (
     <>
-      <h2>{kind ? KIND_SECTIONS[kind] : 'Všetky doklady'}</h2>
+      <h2>
+        {kind ? KIND_SECTIONS[kind] : 'Všetky doklady'}
+        {overdue && <span className="muted"> — po splatnosti, nezaplatené</span>}
+      </h2>
       <form className="filters" method="get">
         {kind && <input type="hidden" name="druh" value={kind} />}
         <input name="q" placeholder="Hľadať partnera alebo číslo" defaultValue={sp.q ?? ''} />

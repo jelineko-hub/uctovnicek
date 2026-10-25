@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { safeNext } from '@/lib/safeNext';
 import { createClient } from '@/lib/supabase-server';
 
 export async function createCompany(formData: FormData) {
@@ -16,9 +17,11 @@ export async function createCompany(formData: FormData) {
   revalidatePath('/app');
 }
 
-export async function signOut() {
+export async function signOut(formData?: FormData) {
   const supabase = await createClient();
   await supabase.auth.signOut();
   revalidatePath('/', 'layout');
-  redirect('/login');
+  // Po odhlásení späť na pozvánku (iný účet) — len relatívna cesta.
+  const next = safeNext(String(formData?.get('next') ?? ''));
+  redirect(next ? `/login?next=${encodeURIComponent(next)}` : '/login');
 }

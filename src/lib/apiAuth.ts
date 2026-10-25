@@ -35,8 +35,10 @@ export const unauthorized = () => apiError(401, 'unauthorized', 'Neprihlásený 
 
 /** HTTP status pre kód chyby zo služieb v `lib/`. */
 export function statusFor(code: string): number {
-  if (code === 'forbidden') return 403;
+  if (code === 'unauthorized') return 401;
+  if (code === 'forbidden' || code === 'wrong_email') return 403;
   if (code === 'not_found') return 404;
+  if (code === 'already_member') return 409;
   if (code === 'db' || code === 'storage') return 500;
   if (code === 'stale' || code === 'cancelled' || code === 'imported' || code === 'not_latest' || code === 'archived') return 409;
   return 400;

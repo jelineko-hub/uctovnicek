@@ -1,5 +1,18 @@
 # Changelog
 
+## Téma v0.011 — E5: pozvánky, členovia, prehľad firiem
+- **Nastavenia firmy → ľudia:** zoznam členov (majiteľ mení rolu, odoberá; firma nesmie ostať bez majiteľa — trigger),
+  pozvánka e-mail + rola → odkaz `/pozvanka/<token>` na 14 dní (zatiaľ ho používateľ pošle sám, e-mail v E7),
+  nevybavené pozvánky: kopírovať odkaz, zrušiť. Pozývať smie majiteľ aj účtovník.
+- **Prijatie pozvánky:** stránka ukáže firmu a rolu; prijať sa dá len účtom s e-mailom z pozvánky (`accept_invite`,
+  security definer). Neprihlásený → prihlásenie a návrat na pozvánku (`?next=`, len relatívne cesty — `lib/safeNext.ts`).
+- **Moje firmy = prehľad:** jedna RPC `company_overview()` — nespracované, na schválenie, schválené neexportované,
+  zamietnuté, faktúry po splatnosti (mám zaplatiť / dlžia mne), posledný export; čísla vedú na filtrované zoznamy.
+  Majiteľ vidí zjednodušený prehľad, účtovník/schvaľovateľ plný. Filter dokladov `po_splatnosti=1`.
+- API: `GET/POST /api/companies/:id/invites`, `POST /api/invites/:token/accept`, `GET /api/overview`.
+- Migrácia `20261025150000_e5_invites_overview.sql` (aplikovaná): `company_invites` + RLS, `invite_preview`,
+  `accept_invite`, `company_member_list`, `company_overview`, trigger `company_members_keep_owner`.
+
 ## Téma v0.010 — E4: bločky z eKasa, DPH bločkov, IBAN signál
 - **eKasa:** `lib/ekasa/` — UID (`O-` + 32 hex) z QR alebo textu, lookup „Over doklad" Finančnej správy
   (`opd/receipt/find`, neoficiálne rozhranie: timeout 5 s, chyby do logu, fallback na vyťaženie), prevod na doklad
