@@ -22,6 +22,10 @@ Funkčný vzor: Doklado (analýza v `docs/analyza-doklado.md`) — preberáme fu
 - `src/lib/supabase-server.ts` (SSR), `supabase-browser.ts`. Service role len v API routes, nikdy v klientovi.
 
 ## Trvalé pravidlá a pasce
+- DB je v zdieľanom Supabase projekte **zkw planner** (`whtnfgxirblxkcmkphhz`) v schéme **`uctovnicek`**.
+  Všetky tabuľky/funkcie len v tejto schéme (nikdy `public`), klienti cez `DB_SCHEMA` z `src/lib/db.ts`.
+  `storage.objects` a `auth.users` sú spoločné so zkw plannerom → storage politiky len pre bucket
+  `uctovnicek-documents` a bez priameho `::uuid` (použi `uctovnicek.path_company_id`).
 - Multi-firma: prístup k dátam = členstvo v `company_members`; RLS cez `is_company_member(company_id, roles)`.
   Každá company-scoped tabuľka má `company_id` a pri inserte ho posielaj explicitne.
 - Roly: `owner`, `accountant`, `approver`, `viewer` (viewer len číta). Nová rola = aj CHECK constraint.
