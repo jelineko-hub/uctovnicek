@@ -59,3 +59,8 @@ Funkčný vzor: Doklado (analýza v `docs/analyza-doklado.md`) — preberáme fu
   RPC `company_member_list` (auth.users nie je cez RLS). Presmerovanie po prihlásení len cez `safeNext`.
 - Účtovné údaje dokladu len cez `lib/accounting/codes.ts` (kľúče = `company_code_lists.list`); export berie `effectiveAccounting`
   (predvolené firmy + doklad). Obdobie dokladu = evidencia → DUZP → vystavenie — rovnako v TS (`periods.ts`), exporte aj DB triggeri.
+- Úlohy: zápis cez `lib/jobs/queue.ts` (`enqueueJob`), spustenie `kickJobs` (after) + cron `/api/cron/jobs` (vercel.json, CRON_SECRET);
+  nový typ úlohy = handler v `lib/jobs/runner.ts` + CHECK `jobs.type`. Handlery bežia so **service role** (`lib/supabase-admin.ts`) —
+  každý dotaz filtruj firmou/dokladom z úlohy; `JobError(msg, false)` = neopakovať. Klient sleduje stav cez `lib/jobs/client.ts`.
+- Zberný e-mail len cez `lib/inbound/` (Resend `email.received`, podpis Svix, prílohy cez API — nie v tele webhooku);
+  `lib/inbound/mail.ts` musí ostať bez serverových importov (používa ho aj stránka nastavení).

@@ -1,7 +1,7 @@
 /**
  * Doplnenie bločku z eKasa: UID → lookup → prepíše hlavičku, partnera a položky dokladu (eKasa má prednosť pred OCR).
  * Volá ho API `/api/documents/:id/ekasa`, vyťaženie (keď model prečíta UID) aj nahrávanie s QR kódom.
- * Synchrónne (~1 s, timeout 5 s); do tabuľky `jobs` sa presunie v E7 spolu s vyťažovaním.
+ * Beží ako úloha `ekasa_lookup` (`lib/jobs/runner.ts`), pri vyťažení aj priamo v rámci úlohy `extract`.
  */
 import { applyAccountingRules } from '../accounting/service';
 import { refreshDuplicateOf } from '../duplicates';

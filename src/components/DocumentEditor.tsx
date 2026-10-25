@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import {
   changeStatus,
   confirmDocument,
@@ -17,6 +17,8 @@ import { CODE_LISTS, CODE_LIST_KEYS, defaultsFor, isEmptyAccounting, itemsFor, t
 import { periodLabel } from '@/lib/accounting/periods';
 import { allowedTransitions, canDelete, canEdit, editBlockedReason, type Role } from '@/lib/documentStatus';
 import { date } from '@/lib/format';
+import { jobMessage, runJobRequest, waitForJob } from '@/lib/jobs/client';
+import type { JobView } from '@/lib/jobs/types';
 import { money } from '@/lib/format';
 import { isValidIban } from '@/lib/iban';
 import { round2, totals } from '@/lib/vat';
@@ -107,6 +109,7 @@ export function DocumentEditor({
   closedPeriod,
   duplicateOf,
   file,
+  lastJob,
 }: {
   doc: EditorDocument;
   role: Role | null;
@@ -118,10 +121,39 @@ export function DocumentEditor({
   closedPeriod: string | null;
   duplicateOf: DuplicateInfo | null;
   file: { url: string; mime: string } | null;
+  /** Posledná úloha vyťaženia/eKasa dokladu (beží → editor čaká a obnoví sa; zlyhala → hláška). */
+  lastJob: JobView | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string; evidenceDate?: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string; evidenceDate?: string } | null>(() =>
+    lastJob?.status === 'failed' && doc.status === 'unprocessed'
+      ? { type: 'error', text: `Vyťaženie zlyhalo: ${jobMessage(lastJob)}` }
+      : null,
+  );
+  const jobActive = (j: JobView | null) => !!j && (j.status === 'pending' || j.status === 'running');
+  const [working, setWorking] = useState(jobActive(lastJob) && doc.status === 'unprocessed');
+
+  // Doklad sa práve vyťažuje na pozadí (napr. príloha zo zberného e-mailu) → počkať a načítať výsledok.
+  useEffect(() => {
+    if (!lastJob || !working) return;
+    let cancelled = false;
+    waitForJob(lastJob.id)
+      .then((chain) => {
+        if (cancelled) return;
+        const last = chain[chain.length - 1];
+        if (last.status === 'done') window.location.reload();
+        else {
+          setWorking(false);
+          setMessage({ type: 'error', text: jobMessage(last) ?? 'Vyťaženie ešte beží.' });
+        }
+      })
+      .catch(() => !cancelled && setWorking(false));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastJob?.id]);
 
   const [kind, setKind] = useState(doc.kind);
   const [subtype, setSubtype] = useState(doc.subtype);
@@ -228,29 +260,27 @@ export function DocumentEditor({
   }
 
   const [ekasaUid, setEkasaUid] = useState(doc.ekasa_uid ?? '');
-  function loadEkasa() {
+  /** Úloha na pozadí (eKasa / vyťaženie): počká na výsledok a načíta doklad znova. */
+  function runJob(url: string, body?: unknown) {
     setMessage(null);
+    setWorking(true);
     startTransition(async () => {
-      const res = await fetch(`/api/documents/${doc.id}/ekasa`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: ekasaUid }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) setMessage({ type: 'error', text: body.error?.message ?? res.statusText });
-      else window.location.reload();
+      try {
+        const chain = await runJobRequest(url, body);
+        const last = chain[chain.length - 1];
+        const problem = last.status === 'done' ? null : jobMessage(last);
+        if (problem) {
+          setMessage({ type: 'error', text: problem });
+          setWorking(false);
+        } else window.location.reload();
+      } catch (e) {
+        setMessage({ type: 'error', text: e instanceof Error ? e.message : String(e) });
+        setWorking(false);
+      }
     });
   }
-
-  async function reextract() {
-    setMessage(null);
-    startTransition(async () => {
-      const res = await fetch(`/api/documents/${doc.id}/extract`, { method: 'POST' });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) setMessage({ type: 'error', text: body.error ?? res.statusText });
-      else window.location.reload();
-    });
-  }
+  const loadEkasa = () => runJob(`/api/documents/${doc.id}/ekasa`, { uid: ekasaUid });
+  const reextract = () => runJob(`/api/documents/${doc.id}/extract`);
 
   const setLine = (i: number, patch: Partial<LineDraft>) =>
     setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
@@ -287,6 +317,7 @@ export function DocumentEditor({
           </span>
         </div>
         {blockedReason && <p className="note">{blockedReason}</p>}
+        {working && <p className="note">Čítam údaje z dokladu… stránka sa po dokončení sama obnoví.</p>}
         {duplicateOf && (
           <div className="warnings dup-banner">
             <strong>Možný duplikát:</strong> rovnaké číslo, suma a dátum ako{' '}

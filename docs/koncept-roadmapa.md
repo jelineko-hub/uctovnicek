@@ -226,7 +226,7 @@ Odhad: E2–E4 ≈ 1 týždeň, E5–E8 ≈ 2–3 týždne práce s Claude Code,
 ## 6. Otvorené otázky (odpovie Oliviero, nie Claude Code)
 
 1. **eKasa endpoint** — overiť dostupnosť a podmienky pred E4 (viď P0.3). Ak nefunguje, E4 = len QR sken → UID do `ekasa_uid` a OCR.
-2. **Doména a provider pre zberný e-mail** (`in.uctovnicek.sk`? Resend / Postmark?) — pred E7.
+2. ~~**Doména a provider pre zberný e-mail**~~ — **rozhodnuté (E7):** Resend Inbound, adresy `<slug>@in.uctovnicek.sk` (MX na subdoméne `in`). Postmark vypadol: prílohy posiela v tele webhooku (base64) → limit 4,5 MB serverless funkcie. Pozvánky e-mailom zatiaľ nie (ručné kopírovanie odkazu).
 3. **ePošťák** — prístup k partnerskému API, formát doručenia, cena — pred E9.
 4. **Banka TopClima** — ktorý CSV formát ide ako prvý parser — pred E8.
 5. **MRP-K/S u účtovníčky** — prvý skúšobný import XML z E3 (kódy Typ DPH, znamienka dobropisu).

@@ -5,6 +5,7 @@ import { normalizeAccounting } from '@/lib/accounting/codes';
 import { periodLabel } from '@/lib/accounting/periods';
 import { loadCodeItems, periodCheck, suggestAccounting } from '@/lib/accounting/service';
 import { isRole } from '@/lib/documentStatus';
+import { latestDocumentJob } from '@/lib/jobs/queue';
 import { createClient } from '@/lib/supabase-server';
 
 export default async function DocumentPage({ params }: { params: Promise<{ companyId: string; docId: string }> }) {
@@ -39,11 +40,15 @@ export default async function DocumentPage({ params }: { params: Promise<{ compa
   const accounting = normalizeAccounting(doc.accounting);
   const partnerIco = (doc.partner_snapshot as { ico?: string | null } | null)?.ico ?? null;
   const showAccounting = role === 'accountant' || role === 'approver';
-  const [codeItems, suggestion, closed] = await Promise.all([
+  const [codeItems, suggestion, closed, job] = await Promise.all([
     showAccounting ? loadCodeItems(supabase, companyId) : Promise.resolve([]),
     showAccounting && !Object.keys(accounting).length ? suggestAccounting(supabase, companyId, doc.kind, partnerIco, doc.id) : Promise.resolve({}),
     doc.status !== 'unprocessed' ? periodCheck(supabase, companyId, doc) : Promise.resolve(null),
+    doc.status === 'unprocessed' ? latestDocumentJob(supabase, doc.id) : Promise.resolve(null),
   ]);
+  // Bežiaca úloha, alebo zlyhaná pri doklade, ktorý sa ešte nikdy nevyťažil (inak by hláška strašila po ručnej oprave).
+  const lastJob =
+    job && (job.status === 'pending' || job.status === 'running' || (job.status === 'failed' && !doc.ocr_raw)) ? job : null;
 
   const file = files?.[0];
   const signed = file
@@ -81,6 +86,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ compa
       closedPeriod={closed ? periodLabel(closed.period) : null}
       duplicateOf={original}
       file={signed && file ? { url: signed, mime: file.mime ?? '' } : null}
+      lastJob={lastJob}
     />
   );
 }

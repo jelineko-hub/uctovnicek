@@ -1,5 +1,21 @@
 # Changelog
 
+## Téma v0.014 — E7: úlohy na pozadí, zberný e-mail
+- **`jobs`** (koncept §4.2): vyťaženie, eKasa a prijatý e-mail bežia ako úlohy. Spustia sa hneď po zápise (`after()`),
+  záložne ich cron `/api/cron/jobs` (každých 5 min) dobehne — pending, chybné s attempts < 3 (najskôr 2 min po chybe)
+  a zaseknuté running (> 10 min). Prevzatie cez RPC `claim_jobs` (skip locked, len service role).
+- **API**: `POST /api/documents/:id/extract` a `/ekasa` vracajú 202 `{job}`; stav `GET /api/jobs/:id`. eKasa s
+  `fallback_extract` pri chybe sama založí vyťaženie z fotky (`result.next_job_id`).
+- **Nahrávanie a editor** len sledujú úlohu (každé 2 s); otvorený doklad, ktorý sa práve vyťažuje (napr. z e-mailu),
+  sa po dokončení sám obnoví. Zlyhané vyťaženie nevyťaženého dokladu sa ukáže v editore.
+- **Zberný e-mail** (P1.6, Nastavenia → Zberný e-mail): adresa `<firma>-xxxxx@in.uctovnicek.sk`, povolení odosielatelia
+  (e-mail alebo `@domena.sk`, na začiatok e-maily členov) alebo „od kohokoľvek". Webhook `POST /api/inbound/email`
+  (Resend `email.received`, podpis Svix) → `inbound_emails` → úloha: prílohy PDF/JPG/PNG → doklady `source='email'` →
+  vyťaženie. Logá v podpise, rovnaký súbor ako existujúci doklad a nepodporované typy sa preskočia. Neznámy odosielateľ
+  → „Neznámy odosielateľ", bez prílohy → „Bez dokladu"; obe sa dajú „Spracovať aj tak" / „Povoliť odosielateľa a spracovať".
+- DB: `jobs`, `company_inboxes`, `inbound_emails`, `claim_jobs()`. Nové env: `SUPABASE_SERVICE_ROLE_KEY`,
+  `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `CRON_SECRET`, voliteľne `INBOUND_EMAIL_DOMAIN`.
+
 ## Téma v0.013 — prihlásenie heslom
 - **Prihlásenie** je predvolene e-mail + heslo (`signInWithPassword`); odkaz e-mailom ostáva ako možnosť. Pridané
   „Vytvoriť účet" (heslo, min. 8 znakov) a „Zabudnuté heslo" (odkaz → Môj účet). Chyby Supabase preložené do slovenčiny.

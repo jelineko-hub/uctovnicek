@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { isCodeList, type Accounting, type CodeList, type RuleMatch } from '@/lib/accounting/codes';
 import { deleteCodeItem, deleteRule, importCodeCsv, saveCodeItem, saveRule, type CodeItemInput } from '@/lib/accounting/service';
+import { createInbox, deleteInboundEmail, reprocessInboundEmail, updateInbox } from '@/lib/inbound/service';
+import { kickJobs } from '@/lib/jobs/runner';
 import { changeMemberRole, createInvite, deleteInvite, removeMember } from '@/lib/members/service';
 import { createClient } from '@/lib/supabase-server';
 
@@ -44,3 +46,20 @@ export const saveRuleAction = async (
   id?: string,
 ) => run(companyId, (db) => saveRule(db, companyId, input, id));
 export const deleteRuleAction = async (companyId: string, id: string) => run(companyId, (db) => deleteRule(db, companyId, id));
+
+// ── Zberný e-mail (E7) ───────────────────────────────────────────
+
+export const createInboxAction = async (companyId: string) => run(companyId, (db) => createInbox(db, companyId));
+export const updateInboxAction = async (companyId: string, allowAll: boolean, senders: string) =>
+  run(companyId, (db) => updateInbox(db, companyId, { allowAll, senders }));
+export const deleteInboundEmailAction = async (companyId: string, emailId: string) =>
+  run(companyId, (db) => deleteInboundEmail(db, companyId, emailId));
+
+/** Spracovať e-mail znova (voliteľne povoliť odosielateľa); úloha beží hneď na pozadí. */
+export async function reprocessInboundEmailAction(companyId: string, emailId: string, allowSender: boolean) {
+  const res = await reprocessInboundEmail(await createClient(), companyId, emailId, { allowSender });
+  if (!res.ok) return { ok: false as const, error: res.error };
+  kickJobs([res.job.id]);
+  revalidatePath(`/app/${companyId}/nastavenia`);
+  return { ok: true as const, jobId: res.job.id };
+}

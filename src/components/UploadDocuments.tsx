@@ -7,6 +7,7 @@ import { compressImage, safeFileName } from '@/lib/compressImage';
 import { DOCUMENTS_BUCKET } from '@/lib/db';
 import { sha256Hex } from '@/lib/duplicates';
 import { uidFromQr } from '@/lib/ekasa/uid';
+import { jobMessage, runJobRequest } from '@/lib/jobs/client';
 import { readQrFromImage } from '@/lib/qrImage';
 import { createClient } from '@/lib/supabase-browser';
 
@@ -26,7 +27,7 @@ const MAX_BYTES = 20 * 1024 * 1024;
 
 /**
  * Nahratie dokladov: súbor ide priamo do Storage (nie cez serverless funkciu — limit ~4,5 MB),
- * potom sa založí záznam dokladu a spustí vyťaženie.
+ * potom sa založí záznam dokladu a úloha vyťaženia (beží na serveri, tu sa len sleduje jej stav).
  */
 export function UploadDocuments({ companyId }: { companyId: string }) {
   const router = useRouter();
@@ -101,30 +102,25 @@ export function UploadDocuments({ companyId }: { companyId: string }) {
       if (fileError) throw new Error(fileError.message);
 
       update(key, { state: 'extracting' });
-      let ekasaNote: string | undefined;
-      if (ekasaUid) {
-        // Bloček s QR → presné údaje z eKasa bez vyťaženia modelom; pri chybe pokračuje bežné vyťaženie.
-        const ek = await fetch(`/api/documents/${docId}/ekasa`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: ekasaUid }),
-        });
-        const ekBody = await ek.json().catch(() => ({}));
-        if (ek.ok) {
-          update(key, { state: 'done', message: ['Údaje z eKasa.', ...(ekBody.warnings ?? [])].join(' ') });
-          return;
-        }
-        ekasaNote = `eKasa: ${ekBody.error?.message ?? ek.statusText} Čítam z fotky.`;
-        update(key, { message: ekasaNote });
-      }
-      const res = await fetch(`/api/documents/${docId}/extract`, { method: 'POST' });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        update(key, { state: 'error', message: `Nahraté, ale nevyťažené: ${body.error ?? res.statusText}` });
-      } else if (body.duplicate_of && !forcedDuplicateOf) {
-        update(key, { state: 'done', duplicateOf: body.duplicate_of, message: 'Možný duplikát — rovnaké číslo, suma a dátum ako iný doklad.' });
+      // Bloček s QR → presné údaje z eKasa; pri chybe eKasa úloha sama pokračuje vyťažením z fotky.
+      const chain = ekasaUid
+        ? await runJobRequest(`/api/documents/${docId}/ekasa`, { uid: ekasaUid, fallback_extract: true })
+        : await runJobRequest(`/api/documents/${docId}/extract`);
+      const last = chain[chain.length - 1];
+      const r = (last.result ?? {}) as { notes?: string | null; duplicate_of?: string | null; warnings?: string[] };
+      const ekasaFail = chain.find((j) => j.type === 'ekasa_lookup' && j.result?.ok === false);
+      const ekasaNote = ekasaFail ? `eKasa: ${String(ekasaFail.result?.error ?? '')} Čítam z fotky.` : undefined;
+      const problem = jobMessage(last);
+      if (last.status === 'failed') {
+        update(key, { state: 'error', message: `Nahraté, ale nevyťažené: ${problem}` });
+      } else if (problem) {
+        update(key, { state: 'done', message: problem });
+      } else if (last.type === 'ekasa_lookup') {
+        update(key, { state: 'done', message: ['Údaje z eKasa.', ...(r.warnings ?? [])].join(' ') });
+      } else if (r.duplicate_of && !forcedDuplicateOf) {
+        update(key, { state: 'done', duplicateOf: r.duplicate_of, message: 'Možný duplikát — rovnaké číslo, suma a dátum ako iný doklad.' });
       } else {
-        update(key, { state: 'done', message: [ekasaNote, body.notes].filter(Boolean).join(' ') || undefined });
+        update(key, { state: 'done', message: [ekasaNote, r.notes].filter(Boolean).join(' ') || undefined });
       }
     } catch (e) {
       update(key, { state: 'error', message: e instanceof Error ? e.message : String(e) });

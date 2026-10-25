@@ -11,3 +11,9 @@ export function date(v: string | null | undefined): string {
   const [y, m, d] = v.slice(0, 10).split('-');
   return `${Number(d)}. ${Number(m)}. ${y}`;
 }
+
+/** Dátum a čas (timestamptz) v slovenskom formáte, napr. „25. 10. 2026 14:05". */
+export function dateTime(v: string | null | undefined): string {
+  if (!v) return '—';
+  return new Date(v).toLocaleString('sk-SK', { timeZone: 'Europe/Bratislava', day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
