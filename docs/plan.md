@@ -21,44 +21,9 @@ Mobil: PWA (fotenie bločkov cez `<input capture>`); natívnu appku riešiť až
 
 ## 2. Fázy
 
-**F0 – Základ (1. týždeň)**
-- Nový repozitár `uctovnicek`, Supabase projekt, Auth (e-mail + magic link).
-- Firmy (multi-firma), členstvá a roly: `owner`, `accountant`, `approver`, `viewer`.
-- RLS podľa `company_id` (rovnaký vzor ako ACDone `company_all`).
-
-**F1 – Prijaté doklady (jadro, MVP)**
-- Nahratie dokladu: foto / PDF / drag&drop → Storage → záznam `document` so stavom `unprocessed`.
-- Vyťaženie (OCR + extrakcia): Claude vision → JSON (dodávateľ, IČO, IČ DPH, číslo, dátumy, suma, DPH podľa sadzieb, VS, IBAN, položky). Kontrola súčtov s toleranciou zaokrúhlenia.
-- eKasa bloček: načítanie QR kódu → UID dokladu → (ak to API FS dovolí) doplnenie údajov.
-- Zoznam „Nespracované" → kontrola → presun do agendy (bločky / prijaté faktúry / iné doklady).
-- Partneri: automatické zakladanie z dokladov, lookup podľa IČO (register), validácia IČ DPH (VIES) a IBAN.
-- Štítky, filtre, fulltext.
-
-**F2 – Vydané faktúry**
-- Typy: faktúra, zálohová, dobropis, ťarchopis, daňový doklad k platbe, opravný; tuzemské/zahraničné.
-- Číselné rady, QR platba (PAY by square) v PDF, odoslanie e-mailom, stav úhrady.
-- Opakovaná fakturácia, automatické upomienky.
-
-**F3 – Banka a pokladňa**
-- Import výpisov (CSV/XML/ABO/CAMT.053) — PSD2 až neskôr (licencia/agregátor).
-- Párovanie podľa VS / sumy / IBAN, ručné párovanie, stav úhrady dokladu.
-- Pokladničné doklady (príjem/výdaj), SEPA XML príkazy na úhradu.
-- Konvertor výpisov platobných brán (Stripe, PayPal, GoPay, Comgate…) — na začiatku 1–2, ktoré používaš.
-
-**F4 – Účtovník a export**
-- Predkontácie, číselné rady, strediská/zákazky/činnosti, členenie DPH a KV DPH na doklade, pomerné účtovanie.
-- Pravidlá automatického účtovania (dodávateľ → predkontácia) + návrhy z histórie.
-- Export: Pohoda XML ako prvý (najrozšírenejší), potom Omega / Money S3 podľa potreby; stav exportu na doklade.
-- Mesačné uzávierky, zamknutie obdobia, história zmien dokladu.
-
-**F5 – Rozšírenia**
-- E-mailová schránka firmy (doklady@… → Nespracované), Rozdeľovač (triedenie do firiem podľa IČO odberateľa).
-- Schvaľovanie (cesty, limity podľa sumy), vyúčtovanie výdavkov zamestnancov.
-- Verejné API + webhooky, dashboard P&L.
-
-**Pozor – Peppol e-faktúra treba skôr (F2):** podľa poradenských zdrojov (PwC, KPMG) je od 1. 1. 2027 v SR povinná
-e-fakturácia B2B/B2G (XML podľa EN 16931, doručovanie cez Peppol cez certifikovaného poskytovateľa; prijímať musia aj neplatitelia DPH).
-Znenie zákona a pokyny FS SR som neoveroval — overiť pred implementáciou.
+Pôvodné fázy F0–F5 nahradil koncept **[`koncept-roadmapa.md`](koncept-roadmapa.md)**:
+priority P0–P3 s rozsahom, DB zmenami a kritériom „hotovo keď" sú v **§3**, poradie práce (etapy E1–E11+) v **§5**.
+F0 a F1 (nahrávanie, vyťaženie, editor, zoznamy) sú hotové vo v0.001–v0.004.
 
 ## 3. Dátový model — návrh (vlastné názvy)
 

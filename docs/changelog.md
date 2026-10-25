@@ -1,5 +1,12 @@
 # Changelog
 
+## Téma v0.005 — E1: koncept a plán etáp
+- `docs/koncept-roadmapa.md`: koncept (most firma ↔ externá účtovníčka), výber funkcií z Doklado, priority P0–P3,
+  architektonické rozhodnutia, etapy E1–E11, otvorené otázky, súhrn zmien dátového modelu.
+- `docs/analyza-doklado.md` nahradená novou verziou (prihlásená časť Doklado, 25. 10. 2026).
+- `docs/plan.md`: kapitola 2 (Fázy F0–F5) nahradená odkazom na koncept §3 a §5.
+- CLAUDE.md: trvalé pravidlá API-first (`/api/*` + Supabase JWT), `jobs` pre externé volania, povinný `documents.source`.
+
 ## Téma v0.004 — Lacnejší model na vyťažovanie
 - Vyťažovanie dokladov prepnuté z `claude-opus-5-5` ($4 / $20 za 1M tokenov) na `claude-haiku-5-5`
   ($0,10 / $0,50 pri promptoch do 100K). Bez server-side fallbacku (Haiku ho nemá), štruktúrovaný výstup cez

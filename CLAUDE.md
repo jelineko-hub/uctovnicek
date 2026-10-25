@@ -5,7 +5,8 @@ prijaté a vydané faktúry, banka, pokladňa, archív a **export do MRP-K/S (XM
 Funkčný vzor: Doklado (analýza v `docs/analyza-doklado.md`) — preberáme funkcie, nie kód, texty ani grafiku.
 
 ## Kde hľadať viac
-- `docs/plan.md` — fázy F0–F5, dátový model, rozhodnutia.
+- `docs/koncept-roadmapa.md` — koncept, priority P0–P3 (§3), architektonické rozhodnutia (§4), etapy E1–E11 (§5).
+- `docs/plan.md` — stack, pôvodný dátový model, rozhodnutia (fázy → koncept-roadmapa).
 - `docs/changelog.md` — história zmien (nový záznam na začiatok).
 - `docs/mrp/` — oficiálna dokumentácia a vzory MRP-K/S XML 2.0 (vydané `_fv`, prijaté `_fp`).
 - `docs/doklado-dokazy/` — zoznam API/rout/schém Doklado (len kontrolný zoznam funkcií).
@@ -41,3 +42,9 @@ Funkčný vzor: Doklado (analýza v `docs/analyza-doklado.md`) — preberáme fu
   `claude-haiku-5-5` (lacný, user ho výslovne chce — drahší model len na jeho pokyn); výstup cez `toDocument` (čistá funkcia) — nová kolónka = schema.ts + toDocument + editor.
 - Názvy druhov/stavov len z `lib/documentKinds.ts`; DPH výpočty len cez `lib/vat.ts`.
 - Body serverless funkcie ~4,5 MB → súbory dokladov nahrávať priamo do Storage (`uctovnicek-documents/<company_id>/<document_id>/…`).
+- API-first (kvôli mobilnej appke): mutácie, ktoré bude potrebovať mobil (upload, založenie a potvrdenie dokladu,
+  vyťaženie, eKasa, zoznamy), musia existovať ako route handlers `/api/*` s autentifikáciou Supabase JWT
+  (`Authorization: Bearer`), nie len ako server actions; zdieľaná logika v `lib/`. Odpoveď JSON, chyba `{error: {code, message}}`.
+- Externé volania (Claude, eKasa, e-mail provider) idú cez tabuľku `jobs` (`pending → running → done|failed`,
+  `attempts`, dobeh cez Vercel Cron); synchrónne ostáva len export XML a párovanie banky.
+- `documents.source` je povinný: `upload | camera | email | einvoice | manual` — každé založenie dokladu ho nastaví.
