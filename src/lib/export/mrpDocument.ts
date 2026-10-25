@@ -70,6 +70,26 @@ export interface ExportDocument {
   lines: ExportLine[];
 }
 
+/** Bežné jednotky → skratka do 3 znakov (MRP `UnitCode` je text max. 3 znaky). */
+const UNIT_ALIASES: Record<string, string> = {
+  kus: 'ks', kusy: 'ks', kusov: 'ks', 'ks.': 'ks',
+  komplet: 'kpl', kompl: 'kpl', 'kompl.': 'kpl', 'kpl.': 'kpl', sada: 'kpl', súprava: 'kpl', suprava: 'kpl',
+  hodina: 'hod', hodiny: 'hod', hodín: 'hod', hodin: 'hod', 'hod.': 'hod',
+  balenie: 'bal', 'bal.': 'bal', paleta: 'pal', 'pal.': 'pal', paliet: 'pal',
+  meter: 'm', metre: 'm', metrov: 'm', bm: 'm', 'bm.': 'm',
+  liter: 'l', litre: 'l', litrov: 'l', kilogram: 'kg', kilogramy: 'kg', tona: 't', tony: 't',
+  deň: 'deň', dni: 'deň', dní: 'deň', den: 'deň', mesiac: 'mes', mesiace: 'mes', mesiacov: 'mes',
+  km: 'km', 'paušál': 'pau', pausal: 'pau',
+};
+
+/** Jednotka pre MRP: skratka, alebo null (vynechá sa), ak sa nedá skrátiť bez straty významu. */
+export function mrpUnit(unit: string | null | undefined): string | null {
+  const u = unit?.trim();
+  if (!u) return null;
+  if (u.length <= 3) return u;
+  return UNIT_ALIASES[u.toLowerCase()] ?? null;
+}
+
 const prefixFor = (kind: ExportKind, s: MrpSettings) =>
   (kind === 'received_invoice' ? s.prefix_received : s.prefix_issued)?.trim() || null;
 
@@ -111,7 +131,7 @@ export function toMrpInvoice(doc: ExportDocument, kind: ExportKind, s: MrpSettin
     lines: doc.lines.map((l) => ({
       description: l.name,
       quantity: Number(l.quantity),
-      unit: l.unit,
+      unit: mrpUnit(l.unit),
       unitPrice: Number(l.unit_price),
       vatRate: Number(l.vat_rate),
       discountPercent: Number(l.discount_percent ?? 0),
@@ -155,6 +175,12 @@ export function checkDocument(doc: ExportDocument, kind: ExportKind, s: MrpSetti
     ).total;
     if (Math.abs(computed - Number(doc.total_amount)) > 0.02) {
       warnings.push(`Súčet položiek ${computed.toFixed(2)} nesedí so sumou dokladu ${Number(doc.total_amount).toFixed(2)}.`);
+    }
+  }
+  for (const l of doc.lines) {
+    const u = l.unit?.trim();
+    if (u && u !== mrpUnit(u)) {
+      warnings.push(mrpUnit(u) ? `Jednotka „${u}" pôjde do MRP ako „${mrpUnit(u)}".` : `Jednotka „${u}" je dlhšia ako 3 znaky — do MRP sa neprenesie.`);
     }
   }
   if (!doc.partner_snapshot?.ico) warnings.push('Partner nemá IČO.');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkDocument, exportFileName, periodRange, previousPeriod, toMrpInvoice, type ExportDocument } from './mrpDocument';
+import { checkDocument, exportFileName, mrpUnit, periodRange, previousPeriod, toMrpInvoice, type ExportDocument } from './mrpDocument';
 
 const doc: ExportDocument = {
   id: '0b6f7c1e-2a4d-4c5b-9e8f-1a2b3c4d5e6f',
@@ -62,5 +62,21 @@ describe('export do MRP', () => {
     expect(periodRange('2026-13')).toBeNull();
     expect(previousPeriod(new Date('2026-01-15T12:00:00Z'))).toBe('2025-12');
     expect(exportFileName('issued_invoice', '2026-10', doc.id)).toBe('MRP_FV_2026-10_0b6f7c1e.xml');
+  });
+
+  it('dlhé jednotky skráti na skratku MRP, neznáme vynechá s upozornením', () => {
+    expect(mrpUnit('komplet')).toBe('kpl');
+    expect(mrpUnit('Hodina')).toBe('hod');
+    expect(mrpUnit('ks')).toBe('ks');
+    expect(mrpUnit('balíček')).toBeNull();
+    const check = checkDocument(
+      { ...doc, lines: [{ ...doc.lines[0], unit: 'komplet' }, { ...doc.lines[0], unit: 'balíček', unit_price: '0' }] },
+      'received_invoice',
+      settings,
+      true,
+    );
+    expect(check.errors).toEqual([]);
+    expect(check.warnings.join(' ')).toMatch(/„kpl"/);
+    expect(check.warnings.join(' ')).toMatch(/neprenesie/);
   });
 });

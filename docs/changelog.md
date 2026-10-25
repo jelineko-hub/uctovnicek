@@ -1,5 +1,9 @@
 # Changelog
 
+## Téma v0.009 — Export: dlhé merné jednotky
+- MRP `UnitCode` má max. 3 znaky: bežné jednotky sa pri exporte skrátia (komplet → kpl, hodina → hod, balenie → bal,
+  meter → m…), neznáma dlhá jednotka sa vynechá. Namiesto chyby, ktorá blokovala export, je to upozornenie v náhľade.
+
 ## Téma v0.008 — Odhlásenie
 - V hlavičke (Moje firmy aj detail firmy) e-mail prihláseného účtu a tlačidlo „Odhlásiť" (server action `signOut` → /login).
 
