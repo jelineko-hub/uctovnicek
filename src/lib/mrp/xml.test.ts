@@ -71,6 +71,19 @@ describe('buildMrpXml', () => {
     expect(() => buildMrpXml('issued', [{ ...invoice, currency: 'USD' }])).toThrow(MrpExportError);
     expect(() => buildMrpXml('issued', [invoice, invoice])).toThrow(MrpExportError);
   });
+
+  it('bez čísla pošle prefix číselného radu a UUID; bez oboch odmietne', () => {
+    const uuid = '0b6f7c1e-2a4d-4c5b-9e8f-1a2b3c4d5e6f';
+    const out = buildMrpXml('incoming', [
+      { ...invoice, documentNumber: null, documentNumberPrefix: 'FP', uuid },
+      { ...invoice, documentNumber: null, documentNumberPrefix: 'FP', uuid: uuid.replace('0b', '0c') },
+    ]);
+    expect(out).not.toContain('<DocumentNumber>FP');
+    expect(out).toContain('<DocumentNumberPrefix>FP</DocumentNumberPrefix>');
+    expect(out).toContain(`<UUID>${uuid}</UUID>`);
+    expect(out.indexOf('<DocumentNumberPrefix>')).toBeLessThan(out.indexOf('<VariableSymbol>'));
+    expect(() => buildMrpXml('incoming', [{ ...invoice, documentNumber: null }])).toThrow(/prefix/);
+  });
 });
 
 describe('toCp1250Safe', () => {

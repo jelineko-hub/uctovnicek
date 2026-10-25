@@ -51,3 +51,5 @@ Funkčný vzor: Doklado (analýza v `docs/analyza-doklado.md`) — preberáme fu
 - Stavy dokladu: prechody a oprávnenia len cez `lib/documentStatus.ts`; exportovaný/archivovaný doklad je zamknutý
   (DB trigger povolí len stav, internú poznámku a technické polia) — nový stĺpec, ktorý sa smie meniť po exporte, pridaj do triggera.
 - Duplicity: `lib/duplicates.ts` (`refreshDuplicateOf` po každej zmene čísla/sumy/dátumu/partnera); hash súboru pri každom novom zdroji.
+- API route handlers: autentifikácia a chyby cez `lib/apiAuth.ts` (`apiClient`, `apiError`, `statusFor`); logika v `lib/<modul>/service.ts`,
+  ktorú volajú aj server actions. Export do MRP len cez `lib/export/` (Účtovníček nečísluje — prefix radu + UUID, číslo pridelí MRP).

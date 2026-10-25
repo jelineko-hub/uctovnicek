@@ -38,6 +38,7 @@ export default async function CompanyLayout({
           <Link key={k} href={`${base}/doklady?druh=${k}`}>{KIND_SECTIONS[k]}</Link>
         ))}
         <Link href={`${base}/partneri`}>Partneri</Link>
+        <Link href={`${base}/export`}>Export</Link>
       </nav>
       {children}
       <p className="muted small" style={{ marginTop: 32 }}>{APP_VERSION}</p>

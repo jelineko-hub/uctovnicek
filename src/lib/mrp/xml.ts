@@ -49,7 +49,14 @@ export interface MrpPayment {
 }
 
 export interface MrpInvoice {
-  documentNumber: string;   // max 10 znakov, jedinečné v MRP
+  /**
+   * Číslo dokladu v MRP (max 10 znakov, jedinečné). Môže chýbať, ak je uvedený `documentNumberPrefix` —
+   * doklad potom očísluje MRP v rade s týmto prefixom (rada musí existovať v číselníku MRP). [overiť importom]
+   */
+  documentNumber?: string | null;
+  documentNumberPrefix?: string | null;
+  /** UUID dokladu (Účtovníček id) — MRP nepovolí duplicitu, opakovaný import toho istého dokladu odmietne. */
+  uuid?: string | null;
   originalNumber?: string | null;  // číslo dodávateľa (prijaté faktúry)
   docType?: 'invoice' | 'credit' | 'debit';
   creditNoteOriginalNumber?: string | null;
@@ -162,11 +169,17 @@ export function vatGroups(lines: MrpLine[], baseRates: number[]): VatGroup[] {
 
 // ── XML ─────────────────────────────────────────────────────────
 
+/** Označenie dokladu v chybových hláškach. */
+const label = (inv: MrpInvoice) => inv.documentNumber || inv.originalNumber || inv.uuid || '?';
+
 function invoiceXml(inv: MrpInvoice, agenda: MrpAgenda, o: Required<MrpOptions>): string {
   if ((inv.currency ?? 'EUR') !== 'EUR') {
-    throw new MrpExportError(`Doklad ${inv.documentNumber}: export v mene ${inv.currency} zatiaľ nie je podporovaný.`);
+    throw new MrpExportError(`Doklad ${label(inv)}: export v mene ${inv.currency} zatiaľ nie je podporovaný.`);
   }
-  if (!inv.lines.length) throw new MrpExportError(`Doklad ${inv.documentNumber} nemá položky.`);
+  if (!inv.lines.length) throw new MrpExportError(`Doklad ${label(inv)} nemá položky.`);
+  if (!inv.documentNumber && !inv.documentNumberPrefix) {
+    throw new MrpExportError(`Doklad ${label(inv)}: chýba číslo dokladu aj prefix číselného radu MRP.`);
+  }
 
   const taxCode = agenda === 'issued' ? o.taxCodeIssued : o.taxCodeIncoming;
   const groups = vatGroups(inv.lines, o.baseRates);
@@ -182,6 +195,7 @@ function invoiceXml(inv: MrpInvoice, agenda: MrpAgenda, o: Required<MrpOptions>)
 
   let x = '    <Invoice>\n';
   x += el('DocumentNumber', clip('Číslo dokladu', inv.documentNumber, 10), i);
+  x += el('UUID', clip('UUID', inv.uuid, 36), i);
   x += el('IssueDate', inv.issueDate, i);
   x += el('CurrencyCode', 'EUR', i);
   x += el('ValuesWithTax', 'F', i);
@@ -202,6 +216,7 @@ function invoiceXml(inv: MrpInvoice, agenda: MrpAgenda, o: Required<MrpOptions>)
   x += el('ContractNumber', clip('Zákazka', inv.contractNumber, 15), i);
   x += el('VatRegime', 0, i);
   x += el('VatCountry', 'SK', i);
+  x += el('DocumentNumberPrefix', clip('Prefix číselného radu', inv.documentNumberPrefix, 10), i);
   x += el('VariableSymbol', clip('VS', inv.variableSymbol, 10), i);
   x += el('ConstantSymbol', clip('KS', inv.constantSymbol, 8), i);
   x += el('SpecificSymbol', clip('ŠS', inv.specificSymbol, 10), i);
@@ -263,7 +278,7 @@ function invoiceXml(inv: MrpInvoice, agenda: MrpAgenda, o: Required<MrpOptions>)
 
   if (inv.payments?.length) {
     if (paid - total > 0.005) {
-      throw new MrpExportError(`Doklad ${inv.documentNumber}: úhrady ${paid} prevyšujú sumu dokladu ${total}.`);
+      throw new MrpExportError(`Doklad ${label(inv)}: úhrady ${paid} prevyšujú sumu dokladu ${total}.`);
     }
     x += `${i}<Payments>\n`;
     for (const pay of inv.payments) {
@@ -291,6 +306,7 @@ export function buildMrpXml(agenda: MrpAgenda, invoices: MrpInvoice[], options: 
   const o = { ...DEFAULTS, ...options };
   const seen = new Set<string>();
   for (const inv of invoices) {
+    if (!inv.documentNumber) continue;
     if (seen.has(inv.documentNumber)) throw new MrpExportError(`Duplicitné číslo dokladu ${inv.documentNumber}.`);
     seen.add(inv.documentNumber);
   }

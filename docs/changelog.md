@@ -1,5 +1,21 @@
 # Changelog
 
+## Téma v0.007 — E3: export do MRP-K/S
+- Záložka **Export**: výber prijaté / vydané faktúry a mesiac (podľa DUZP, inak dátumu vystavenia), náhľad schválených
+  dokladov s kontrolou (chyby blokujú: chýba partner, položky, dátum, prefix radu, limity MRP; upozornenia: nesedí
+  suma, dobropis, chýba IČO, iný režim DPH), počet ešte neschválených dokladov v mesiaci, výber dokladov zaškrtnutím.
+- „Vytvoriť export" → XML do Storage `<firma>/exports/<id>.xml`, záznam v `exports`, doklady → Exportované
+  (+ `export_id`, `exported_at`, zámok z E2). Zoznam exportov: stiahnutie (prvé → Stiahnutý), Naimportované v MRP,
+  Import zlyhal (s textom chyby), Zrušiť export (len posledný, nie naimportovaný → doklady späť do Schválené).
+- Číslovanie ako v Doklado: Účtovníček nečísluje, posiela `DocumentNumberPrefix` (prefix radu z nastavenia exportu)
+  a MRP pridelí číslo pri importe; `UUID` = id dokladu (MRP odmietne opakovaný import). Nastavenie exportu vo firme:
+  prefix pre prijaté/vydané, kód Typ DPH (predvolené 40/10) — `companies.settings.mrp`.
+- API-first: `GET/POST /api/companies/:id/exports`, `PATCH …/exports/:exportId`, `POST …/cancel`, `GET …/file`;
+  `lib/apiAuth.ts` (Bearer JWT alebo cookies, chyby `{error:{code,message}}`). Logika v `lib/export/` + testy.
+- Migrácia `20261025130000_e3_exports.sql` (aplikovaná): `exports.kind`, `error`, `file_name`, stav `cancelled`,
+  `documents.export_id`.
+- Bločky sa zatiaľ neexportujú (prídu ako pokladničné doklady MRP).
+
 ## Téma v0.006 — E2: stav dokladu, zámok po exporte, duplicity
 - `lib/documentStatus.ts`: povolené prechody stavov a kto ich smie (majiteľ po „pripravený", schvaľovateľ po
   „schválený", účtovník všetko, len-čítanie nič) + testy. Server actions a editor ho používajú; nová akcia
